@@ -1,12 +1,23 @@
 import { UtensilsCrossed } from 'lucide-react'
 import { APP_NAME } from '../../lib/constants'
+import { supabase } from '../../lib/supabase'
 
 export default function LoginPage() {
-  const handleGoogleLogin = () => {
-    console.log('Google Login clicked')
-  }
-
   const currentYear = new Date().getFullYear()
+
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    })
+    
+    if (error) {
+      console.error('Login error:', error.message)
+      alert('Login failed. Please try again.')
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white flex flex-col items-center justify-center p-6">
