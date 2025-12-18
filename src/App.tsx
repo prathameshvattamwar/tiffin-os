@@ -4,12 +4,13 @@ import { supabase } from './lib/supabase'
 import LoginPage from './features/auth/LoginPage'
 import OnboardingPage from './features/auth/OnboardingPage'
 import DashboardPage from './features/dashboard/DashboardPage'
+import CustomersPage from './features/customers/CustomersPage'
 import BottomNav from './components/ui/BottomNav'
 
-function AppLayout() {
+function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
-      <DashboardPage />
+      {children}
       <BottomNav />
     </div>
   )
@@ -37,7 +38,6 @@ function App() {
         return
       }
 
-      // Check if vendor profile exists
       const { data: vendor } = await supabase
         .from('vendors')
         .select('id, is_onboarded')
@@ -55,7 +55,6 @@ function App() {
     }
   }
 
-  // Loading state
   if (authState === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -67,29 +66,34 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Login */}
         <Route 
           path="/login" 
           element={authState === 'logged_out' ? <LoginPage /> : <Navigate to="/" />} 
         />
 
-        {/* Onboarding */}
         <Route 
           path="/onboarding" 
           element={authState === 'needs_onboarding' ? <OnboardingPage /> : <Navigate to="/" />} 
         />
 
-        {/* Dashboard */}
         <Route
           path="/"
           element={
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-            <AppLayout />
+            <AppLayout><DashboardPage /></AppLayout>
           }
         />
 
-        {/* Catch all */}
+        <Route
+          path="/customers"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <AppLayout><CustomersPage /></AppLayout>
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
