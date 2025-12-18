@@ -5,6 +5,7 @@ import LoginPage from './features/auth/LoginPage'
 import OnboardingPage from './features/auth/OnboardingPage'
 import DashboardPage from './features/dashboard/DashboardPage'
 import CustomersPage from './features/customers/CustomersPage'
+import AttendancePage from './features/attendance/AttendancePage'
 import BottomNav from './components/ui/BottomNav'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
@@ -91,6 +92,15 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <AppLayout><CustomersPage /></AppLayout>
+          }
+        />
+
+        <Route
+          path="/track"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <AppLayout><AttendancePage /></AppLayout>
           }
         />
 
