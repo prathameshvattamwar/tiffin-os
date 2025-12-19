@@ -1,17 +1,17 @@
 import { NavLink } from 'react-router-dom'
-import { Home, Users, CalendarCheck, FileText, Settings } from 'lucide-react'
+import { Home, Users, CalendarCheck, IndianRupee, Settings } from 'lucide-react'
 
 const navItems = [
   { to: '/', icon: Home, label: 'Home' },
   { to: '/customers', icon: Users, label: 'Customers' },
   { to: '/track', icon: CalendarCheck, label: 'Track' },
-  { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/payments', icon: IndianRupee, label: 'Payments' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ]
 
 export default function BottomNav() {
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-area-bottom">
       <div className="flex justify-around items-center max-w-lg mx-auto h-16">
         {navItems.map((item) => (
           <NavLink

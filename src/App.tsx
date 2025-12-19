@@ -7,6 +7,8 @@ import DashboardPage from './features/dashboard/DashboardPage'
 import CustomersPage from './features/customers/CustomersPage'
 import AttendancePage from './features/attendance/AttendancePage'
 import BottomNav from './components/ui/BottomNav'
+import PaymentsPage from './features/payments/PaymentsPage'
+import SettingsPage from './features/settings/SettingsPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -101,6 +103,24 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <AppLayout><AttendancePage /></AppLayout>
+          }
+        />
+
+        <Route
+          path="/payments"
+                element={
+                  authState === 'logged_out' ? <Navigate to="/login" /> :
+                  authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+                  <AppLayout><PaymentsPage /></AppLayout>
+                }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <AppLayout><SettingsPage /></AppLayout>
           }
         />
 
