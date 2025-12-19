@@ -3,8 +3,10 @@ import { Plus, Search, Phone, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Customer } from '../../types'
 import AddCustomerModal from './AddCustomerModal'
+import { useNavigate } from 'react-router-dom'
 
 export default function CustomersPage() {
+  const navigate = useNavigate()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
@@ -110,7 +112,8 @@ export default function CustomersPage() {
             {filteredCustomers.map((customer) => (
               <div
                 key={customer.id}
-                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm"
+                onClick={() => navigate(`/customer/${customer.id}`)}
+                className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-100 rounded-full flex items-center justify-center">

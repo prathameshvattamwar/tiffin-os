@@ -9,6 +9,8 @@ import AttendancePage from './features/attendance/AttendancePage'
 import BottomNav from './components/ui/BottomNav'
 import PaymentsPage from './features/payments/PaymentsPage'
 import SettingsPage from './features/settings/SettingsPage'
+import CustomerDetailPage from './features/customers/CustomerDetailPage'
+import ReportPage from './features/reports/ReportPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -121,6 +123,24 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <AppLayout><SettingsPage /></AppLayout>
+          }
+        />
+
+        <Route
+          path="/customer/:id"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <CustomerDetailPage />
+          }
+        />
+
+        <Route
+          path="/report/:id"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <ReportPage />
           }
         />
 

@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Check, X, Users } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, Users, UserPlus, Minus, Plus } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import type { Customer } from '../../types'
 
-interface AttendanceRecord {
-  customer_id: string
+interface AttendanceData {
   status: 'present' | 'absent' | null
+  guest_count: number
 }
 
 export default function AttendancePage() {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [attendance, setAttendance] = useState<Map<string, string>>(new Map())
+  const [attendance, setAttendance] = useState<Map<string, AttendanceData>>(new Map())
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [vendorId, setVendorId] = useState<string | null>(null)
+  const [showGuestModal, setShowGuestModal] = useState<string | null>(null)
 
   useEffect(() => {
     fetchData()
@@ -49,13 +50,16 @@ export default function AttendancePage() {
       const dateStr = selectedDate.toISOString().split('T')[0]
       const { data: attendanceData } = await supabase
         .from('attendance')
-        .select('customer_id, meal_taken')
+        .select('customer_id, meal_taken, guest_count')
         .eq('vendor_id', vendor.id)
         .eq('attendance_date', dateStr)
 
-      const attendanceMap = new Map<string, string>()
+      const attendanceMap = new Map<string, AttendanceData>()
       attendanceData?.forEach(record => {
-        attendanceMap.set(record.customer_id, record.meal_taken)
+        attendanceMap.set(record.customer_id, {
+          status: record.meal_taken as 'present' | 'absent',
+          guest_count: record.guest_count || 0
+        })
       })
       setAttendance(attendanceMap)
 
@@ -69,13 +73,17 @@ export default function AttendancePage() {
   const markAttendance = async (customerId: string, status: 'present' | 'absent') => {
     if (!vendorId) return
 
-    const currentStatus = attendance.get(customerId)
+    const current = attendance.get(customerId)
+    const currentStatus = current?.status
     const newStatus = currentStatus === status ? null : status
 
     // Optimistic update
     const newAttendance = new Map(attendance)
     if (newStatus) {
-      newAttendance.set(customerId, newStatus)
+      newAttendance.set(customerId, { 
+        status: newStatus, 
+        guest_count: current?.guest_count || 0 
+      })
     } else {
       newAttendance.delete(customerId)
     }
@@ -85,7 +93,6 @@ export default function AttendancePage() {
       const dateStr = selectedDate.toISOString().split('T')[0]
 
       if (newStatus) {
-        // Upsert attendance
         await supabase
           .from('attendance')
           .upsert({
@@ -93,12 +100,11 @@ export default function AttendancePage() {
             vendor_id: vendorId,
             attendance_date: dateStr,
             meal_taken: newStatus,
-            guest_count: 0
+            guest_count: current?.guest_count || 0
           }, {
             onConflict: 'customer_id,attendance_date'
           })
       } else {
-        // Delete attendance
         await supabase
           .from('attendance')
           .delete()
@@ -107,7 +113,39 @@ export default function AttendancePage() {
       }
     } catch (error) {
       console.error('Error saving attendance:', error)
-      // Revert on error
+      fetchData()
+    }
+  }
+
+  const updateGuestCount = async (customerId: string, change: number) => {
+    if (!vendorId) return
+
+    const current = attendance.get(customerId)
+    const newGuestCount = Math.max(0, (current?.guest_count || 0) + change)
+
+    // Optimistic update
+    const newAttendance = new Map(attendance)
+    newAttendance.set(customerId, {
+      status: current?.status || 'present',
+      guest_count: newGuestCount
+    })
+    setAttendance(newAttendance)
+
+    try {
+      const dateStr = selectedDate.toISOString().split('T')[0]
+      await supabase
+        .from('attendance')
+        .upsert({
+          customer_id: customerId,
+          vendor_id: vendorId,
+          attendance_date: dateStr,
+          meal_taken: current?.status || 'present',
+          guest_count: newGuestCount
+        }, {
+          onConflict: 'customer_id,attendance_date'
+        })
+    } catch (error) {
+      console.error('Error updating guest count:', error)
       fetchData()
     }
   }
@@ -124,7 +162,7 @@ export default function AttendancePage() {
         vendor_id: vendorId,
         attendance_date: dateStr,
         meal_taken: 'present',
-        guest_count: 0
+        guest_count: attendance.get(customer.id)?.guest_count || 0
       }))
 
       await supabase
@@ -157,8 +195,9 @@ export default function AttendancePage() {
     })
   }
 
-  const presentCount = Array.from(attendance.values()).filter(s => s === 'present').length
-  const absentCount = Array.from(attendance.values()).filter(s => s === 'absent').length
+  const presentCount = Array.from(attendance.values()).filter(a => a.status === 'present').length
+  const absentCount = Array.from(attendance.values()).filter(a => a.status === 'absent').length
+  const totalGuests = Array.from(attendance.values()).reduce((sum, a) => sum + (a.guest_count || 0), 0)
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
@@ -191,7 +230,7 @@ export default function AttendancePage() {
         </div>
 
         {/* Stats */}
-        <div className="flex gap-4 mt-4">
+        <div className="flex gap-3 mt-4">
           <div className="flex-1 bg-green-50 rounded-xl p-3 text-center">
             <p className="text-2xl font-bold text-green-600">{presentCount}</p>
             <p className="text-xs text-green-600 font-medium">Present</p>
@@ -200,9 +239,9 @@ export default function AttendancePage() {
             <p className="text-2xl font-bold text-red-500">{absentCount}</p>
             <p className="text-xs text-red-500 font-medium">Absent</p>
           </div>
-          <div className="flex-1 bg-gray-100 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-gray-600">{customers.length - presentCount - absentCount}</p>
-            <p className="text-xs text-gray-500 font-medium">Unmarked</p>
+          <div className="flex-1 bg-blue-50 rounded-xl p-3 text-center">
+            <p className="text-2xl font-bold text-blue-600">{totalGuests}</p>
+            <p className="text-xs text-blue-600 font-medium">Guests</p>
           </div>
         </div>
       </div>
@@ -238,7 +277,9 @@ export default function AttendancePage() {
         ) : (
           <div className="space-y-2">
             {customers.map((customer) => {
-              const status = attendance.get(customer.id)
+              const data = attendance.get(customer.id)
+              const status = data?.status
+              const guestCount = data?.guest_count || 0
               
               return (
                 <div
@@ -264,6 +305,30 @@ export default function AttendancePage() {
                       <h3 className="font-semibold text-gray-900">{customer.full_name}</h3>
                       <p className="text-sm text-gray-500">{customer.mobile_number}</p>
                     </div>
+                    
+                    {/* Guest Counter */}
+                    {status === 'present' && (
+                      <div className="flex items-center gap-1 mr-2">
+                        <button
+                          onClick={() => updateGuestCount(customer.id, -1)}
+                          disabled={guestCount === 0}
+                          className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 disabled:opacity-30"
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <div className="w-10 h-8 flex items-center justify-center">
+                          <span className={`font-semibold ${guestCount > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                            {guestCount > 0 ? `+${guestCount}` : '0'}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => updateGuestCount(customer.id, 1)}
+                          className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    )}
                     
                     <div className="flex gap-2">
                       <button
