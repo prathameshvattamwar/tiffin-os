@@ -1,28 +1,68 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Check, X, Users, UserPlus, Minus, Plus } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, X, Users, Plus, Minus, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-import type { Customer } from '../../types'
 
-interface AttendanceData {
-  status: 'present' | 'absent' | null
+interface Customer {
+  id: string
+  full_name: string
+  mobile_number: string
+  subscription?: {
+    id: string
+    start_date: string
+    end_date: string
+    meal_frequency: string
+  }
+}
+
+interface AttendanceRecord {
+  attendance_date: string
+  lunch_taken: boolean
+  dinner_taken: boolean
   guest_count: number
+  is_cancelled: boolean
+  notes: string
 }
 
 export default function AttendancePage() {
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [mode, setMode] = useState<'quick' | 'calendar'>('quick')
   const [customers, setCustomers] = useState<Customer[]>([])
-  const [attendance, setAttendance] = useState<Map<string, AttendanceData>>(new Map())
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [vendorId, setVendorId] = useState<string | null>(null)
-  const [showGuestModal, setShowGuestModal] = useState<string | null>(null)
+  
+  // Quick mode states
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [quickAttendance, setQuickAttendance] = useState<Map<string, { lunch: boolean; dinner: boolean; guests: number }>>(new Map())
+  
+  // Calendar mode states
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+  const [customerAttendance, setCustomerAttendance] = useState<Map<string, AttendanceRecord>>(new Map())
+  const [showDayModal, setShowDayModal] = useState<string | null>(null)
+  const [dayFormData, setDayFormData] = useState({
+    lunch: false,
+    dinner: false,
+    guests: 0,
+    cancelled: false,
+    notes: ''
+  })
 
   useEffect(() => {
-    fetchData()
-  }, [selectedDate])
+    fetchCustomers()
+  }, [])
 
-  const fetchData = async () => {
-    setLoading(true)
+  useEffect(() => {
+    if (mode === 'quick') {
+      fetchQuickAttendance()
+    }
+  }, [selectedDate, mode])
+
+  useEffect(() => {
+    if (selectedCustomer && mode === 'calendar') {
+      fetchCustomerAttendance()
+    }
+  }, [selectedCustomer, currentMonth, mode])
+
+  const fetchCustomers = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
@@ -36,320 +76,359 @@ export default function AttendancePage() {
       if (!vendor) return
       setVendorId(vendor.id)
 
-      // Fetch customers
       const { data: customersData } = await supabase
         .from('customers')
-        .select('*')
+        .select(`
+          id, full_name, mobile_number,
+          subscriptions (id, start_date, end_date, meal_frequency, status)
+        `)
         .eq('vendor_id', vendor.id)
         .eq('is_active', true)
         .order('full_name')
 
-      setCustomers(customersData || [])
+      const customersWithSub = (customersData || []).map((c: any) => ({
+        ...c,
+        subscription: c.subscriptions?.find((s: any) => s.status === 'active')
+      }))
 
-      // Fetch attendance for selected date
-      const dateStr = selectedDate.toISOString().split('T')[0]
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('customer_id, meal_taken, guest_count')
-        .eq('vendor_id', vendor.id)
-        .eq('attendance_date', dateStr)
-
-      const attendanceMap = new Map<string, AttendanceData>()
-      attendanceData?.forEach(record => {
-        attendanceMap.set(record.customer_id, {
-          status: record.meal_taken as 'present' | 'absent',
-          guest_count: record.guest_count || 0
-        })
-      })
-      setAttendance(attendanceMap)
-
+      setCustomers(customersWithSub)
     } catch (error) {
-      console.error('Error fetching data:', error)
+      console.error('Error:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const markAttendance = async (customerId: string, status: 'present' | 'absent') => {
+  const fetchQuickAttendance = async () => {
     if (!vendorId) return
+    
+    const dateStr = selectedDate.toISOString().split('T')[0]
+    const { data } = await supabase
+      .from('attendance')
+      .select('customer_id, lunch_taken, dinner_taken, guest_count')
+      .eq('vendor_id', vendorId)
+      .eq('attendance_date', dateStr)
 
-    const current = attendance.get(customerId)
-    const currentStatus = current?.status
-    const newStatus = currentStatus === status ? null : status
-
-    // Optimistic update
-    const newAttendance = new Map(attendance)
-    if (newStatus) {
-      newAttendance.set(customerId, { 
-        status: newStatus, 
-        guest_count: current?.guest_count || 0 
+    const map = new Map<string, { lunch: boolean; dinner: boolean; guests: number }>()
+    data?.forEach(r => {
+      map.set(r.customer_id, {
+        lunch: r.lunch_taken || false,
+        dinner: r.dinner_taken || false,
+        guests: r.guest_count || 0
       })
-    } else {
-      newAttendance.delete(customerId)
-    }
-    setAttendance(newAttendance)
-
-    try {
-      const dateStr = selectedDate.toISOString().split('T')[0]
-
-      if (newStatus) {
-        await supabase
-          .from('attendance')
-          .upsert({
-            customer_id: customerId,
-            vendor_id: vendorId,
-            attendance_date: dateStr,
-            meal_taken: newStatus,
-            guest_count: current?.guest_count || 0
-          }, {
-            onConflict: 'customer_id,attendance_date'
-          })
-      } else {
-        await supabase
-          .from('attendance')
-          .delete()
-          .eq('customer_id', customerId)
-          .eq('attendance_date', dateStr)
-      }
-    } catch (error) {
-      console.error('Error saving attendance:', error)
-      fetchData()
-    }
+    })
+    setQuickAttendance(map)
   }
 
-  const updateGuestCount = async (customerId: string, change: number) => {
+  const fetchCustomerAttendance = async () => {
+    if (!vendorId || !selectedCustomer) return
+
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth()
+    const startDate = new Date(year, month, 1).toISOString().split('T')[0]
+    const endDate = new Date(year, month + 1, 0).toISOString().split('T')[0]
+
+    const { data } = await supabase
+      .from('attendance')
+      .select('attendance_date, lunch_taken, dinner_taken, guest_count, is_cancelled, notes')
+      .eq('customer_id', selectedCustomer.id)
+      .gte('attendance_date', startDate)
+      .lte('attendance_date', endDate)
+
+    const map = new Map<string, AttendanceRecord>()
+    data?.forEach(r => {
+      map.set(r.attendance_date, {
+        attendance_date: r.attendance_date,
+        lunch_taken: r.lunch_taken || false,
+        dinner_taken: r.dinner_taken || false,
+        guest_count: r.guest_count || 0,
+        is_cancelled: r.is_cancelled || false,
+        notes: r.notes || ''
+      })
+    })
+    setCustomerAttendance(map)
+  }
+
+  // Quick mode: Toggle meal
+  const toggleQuickMeal = async (customerId: string, meal: 'lunch' | 'dinner') => {
     if (!vendorId) return
 
-    const current = attendance.get(customerId)
-    const newGuestCount = Math.max(0, (current?.guest_count || 0) + change)
+    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guests: 0 }
+    const updated = { ...current, [meal]: !current[meal] }
 
     // Optimistic update
-    const newAttendance = new Map(attendance)
-    newAttendance.set(customerId, {
-      status: current?.status || 'present',
-      guest_count: newGuestCount
-    })
-    setAttendance(newAttendance)
+    const newMap = new Map(quickAttendance)
+    newMap.set(customerId, updated)
+    setQuickAttendance(newMap)
 
-    try {
-      const dateStr = selectedDate.toISOString().split('T')[0]
-      await supabase
-        .from('attendance')
-        .upsert({
-          customer_id: customerId,
-          vendor_id: vendorId,
-          attendance_date: dateStr,
-          meal_taken: current?.status || 'present',
-          guest_count: newGuestCount
-        }, {
-          onConflict: 'customer_id,attendance_date'
-        })
-    } catch (error) {
-      console.error('Error updating guest count:', error)
-      fetchData()
-    }
+    const dateStr = selectedDate.toISOString().split('T')[0]
+    await supabase.from('attendance').upsert({
+      customer_id: customerId,
+      vendor_id: vendorId,
+      attendance_date: dateStr,
+      lunch_taken: updated.lunch,
+      dinner_taken: updated.dinner,
+      guest_count: updated.guests,
+      meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
+    }, { onConflict: 'customer_id,attendance_date' })
   }
 
-  const markAllPresent = async () => {
-    if (!vendorId || customers.length === 0) return
-    setSaving(true)
+  const updateQuickGuests = async (customerId: string, change: number) => {
+    if (!vendorId) return
 
-    try {
-      const dateStr = selectedDate.toISOString().split('T')[0]
-      
-      const records = customers.map(customer => ({
-        customer_id: customer.id,
-        vendor_id: vendorId,
-        attendance_date: dateStr,
-        meal_taken: 'present',
-        guest_count: attendance.get(customer.id)?.guest_count || 0
-      }))
+    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guests: 0 }
+    const newGuests = Math.max(0, current.guests + change)
+    const updated = { ...current, guests: newGuests }
 
-      await supabase
-        .from('attendance')
-        .upsert(records, { onConflict: 'customer_id,attendance_date' })
+    const newMap = new Map(quickAttendance)
+    newMap.set(customerId, updated)
+    setQuickAttendance(newMap)
 
-      fetchData()
-    } catch (error) {
-      console.error('Error marking all present:', error)
-    } finally {
-      setSaving(false)
-    }
+    const dateStr = selectedDate.toISOString().split('T')[0]
+    await supabase.from('attendance').upsert({
+      customer_id: customerId,
+      vendor_id: vendorId,
+      attendance_date: dateStr,
+      lunch_taken: updated.lunch,
+      dinner_taken: updated.dinner,
+      guest_count: newGuests,
+      meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
+    }, { onConflict: 'customer_id,attendance_date' })
+  }
+
+  // Calendar helpers
+  const getDaysInMonth = () => {
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth()
+    const firstDay = new Date(year, month, 1).getDay()
+    const daysInMonth = new Date(year, month + 1, 0).getDate()
+    
+    const days: (number | null)[] = []
+    for (let i = 0; i < firstDay; i++) days.push(null)
+    for (let i = 1; i <= daysInMonth; i++) days.push(i)
+    return days
+  }
+
+  const getDateStr = (day: number) => {
+    const year = currentMonth.getFullYear()
+    const month = currentMonth.getMonth()
+    return new Date(year, month, day).toISOString().split('T')[0]
+  }
+
+  const isDateInSubscription = (day: number) => {
+    if (!selectedCustomer?.subscription) return false
+    const dateStr = getDateStr(day)
+    return dateStr >= selectedCustomer.subscription.start_date && 
+           dateStr <= selectedCustomer.subscription.end_date
+  }
+
+  const isFutureDate = (day: number) => {
+    const dateStr = getDateStr(day)
+    return dateStr > new Date().toISOString().split('T')[0]
+  }
+
+  const openDayModal = (day: number) => {
+    if (isFutureDate(day) || !isDateInSubscription(day)) return
+    
+    const dateStr = getDateStr(day)
+    const record = customerAttendance.get(dateStr)
+    
+    setDayFormData({
+      lunch: record?.lunch_taken || false,
+      dinner: record?.dinner_taken || false,
+      guests: record?.guest_count || 0,
+      cancelled: record?.is_cancelled || false,
+      notes: record?.notes || ''
+    })
+    setShowDayModal(dateStr)
+  }
+
+  const saveDayAttendance = async () => {
+    if (!vendorId || !selectedCustomer || !showDayModal) return
+
+    await supabase.from('attendance').upsert({
+      customer_id: selectedCustomer.id,
+      vendor_id: vendorId,
+      attendance_date: showDayModal,
+      lunch_taken: dayFormData.lunch,
+      dinner_taken: dayFormData.dinner,
+      guest_count: dayFormData.guests,
+      is_cancelled: dayFormData.cancelled,
+      notes: dayFormData.notes,
+      meal_taken: dayFormData.cancelled ? 'cancelled' : (dayFormData.lunch || dayFormData.dinner) ? 'present' : 'absent'
+    }, { onConflict: 'customer_id,attendance_date' })
+
+    setShowDayModal(null)
+    fetchCustomerAttendance()
   }
 
   const changeDate = (days: number) => {
     const newDate = new Date(selectedDate)
     newDate.setDate(newDate.getDate() + days)
-    if (newDate <= new Date()) {
-      setSelectedDate(newDate)
-    }
+    if (newDate <= new Date()) setSelectedDate(newDate)
   }
 
+  const formatDate = (date: Date) => date.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' })
   const isToday = selectedDate.toDateString() === new Date().toDateString()
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-IN', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short'
-    })
-  }
-
-  const presentCount = Array.from(attendance.values()).filter(a => a.status === 'present').length
-  const absentCount = Array.from(attendance.values()).filter(a => a.status === 'absent').length
-  const totalGuests = Array.from(attendance.values()).reduce((sum, a) => sum + (a.guest_count || 0), 0)
+  // Stats
+  const lunchCount = Array.from(quickAttendance.values()).filter(a => a.lunch).length
+  const dinnerCount = Array.from(quickAttendance.values()).filter(a => a.dinner).length
+  const guestCount = Array.from(quickAttendance.values()).reduce((sum, a) => sum + a.guests, 0)
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-5 py-4 sticky top-0 z-10">
-        <h1 className="text-lg font-bold text-gray-900 mb-4">Attendance</h1>
+        <h1 className="text-lg font-bold text-gray-900 mb-3">Attendance</h1>
         
-        {/* Date Selector */}
-        <div className="flex items-center justify-between bg-gray-100 rounded-xl p-2">
+        {/* Mode Toggle */}
+        <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
           <button
-            onClick={() => changeDate(-1)}
-            className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-white rounded-lg transition"
+            onClick={() => { setMode('quick'); setSelectedCustomer(null) }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+              mode === 'quick' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+            }`}
           >
-            <ChevronLeft className="w-5 h-5" />
+            Quick Mark
           </button>
-          
-          <div className="text-center">
-            <p className="font-semibold text-gray-900">{formatDate(selectedDate)}</p>
-            {isToday && <p className="text-xs text-orange-500 font-medium">Today</p>}
-          </div>
-          
           <button
-            onClick={() => changeDate(1)}
-            disabled={isToday}
-            className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-white rounded-lg transition disabled:opacity-30"
+            onClick={() => setMode('calendar')}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
+              mode === 'calendar' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+            }`}
           >
-            <ChevronRight className="w-5 h-5" />
+            Calendar View
           </button>
         </div>
 
-        {/* Stats */}
-        <div className="flex gap-3 mt-4">
-          <div className="flex-1 bg-green-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-green-600">{presentCount}</p>
-            <p className="text-xs text-green-600 font-medium">Present</p>
+        {mode === 'quick' ? (
+          <>
+            {/* Date Selector */}
+            <div className="flex items-center justify-between bg-gray-100 rounded-xl p-2 mb-4">
+              <button onClick={() => changeDate(-1)} className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-white rounded-lg">
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <div className="text-center">
+                <p className="font-semibold text-gray-900">{formatDate(selectedDate)}</p>
+                {isToday && <p className="text-xs text-orange-500 font-medium">Today</p>}
+              </div>
+              <button onClick={() => changeDate(1)} disabled={isToday} className="w-10 h-10 flex items-center justify-center text-gray-600 hover:bg-white rounded-lg disabled:opacity-30">
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Stats */}
+            <div className="flex gap-3">
+              <div className="flex-1 bg-orange-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-orange-600">{lunchCount}</p>
+                <p className="text-xs text-orange-600">Lunch</p>
+              </div>
+              <div className="flex-1 bg-purple-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-purple-600">{dinnerCount}</p>
+                <p className="text-xs text-purple-600">Dinner</p>
+              </div>
+              <div className="flex-1 bg-blue-50 rounded-xl p-3 text-center">
+                <p className="text-xl font-bold text-blue-600">{guestCount}</p>
+                <p className="text-xs text-blue-600">Guests</p>
+              </div>
+            </div>
+          </>
+        ) : (
+          /* Customer Selector for Calendar */
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <select
+              value={selectedCustomer?.id || ''}
+              onChange={(e) => {
+                const cust = customers.find(c => c.id === e.target.value)
+                setSelectedCustomer(cust || null)
+              }}
+              className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="">Select Customer...</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name} - {c.subscription?.meal_frequency?.replace('_', ' ') || 'No Plan'}
+                </option>
+              ))}
+            </select>
           </div>
-          <div className="flex-1 bg-red-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-red-500">{absentCount}</p>
-            <p className="text-xs text-red-500 font-medium">Absent</p>
-          </div>
-          <div className="flex-1 bg-blue-50 rounded-xl p-3 text-center">
-            <p className="text-2xl font-bold text-blue-600">{totalGuests}</p>
-            <p className="text-xs text-blue-600 font-medium">Guests</p>
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Quick Action */}
-      {customers.length > 0 && (
-        <div className="px-5 py-3">
-          <button
-            onClick={markAllPresent}
-            disabled={saving}
-            className="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white py-3 rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 disabled:opacity-50"
-          >
-            <Check className="w-5 h-5" />
-            {saving ? 'Marking...' : 'Mark All Present'}
-          </button>
-        </div>
-      )}
-
-      {/* Customer List */}
-      <div className="px-5 py-2">
+      {/* Content */}
+      <div className="px-5 py-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : customers.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Users className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">No customers yet</h3>
-            <p className="text-gray-500">Add customers first to mark attendance</p>
-          </div>
-        ) : (
+        ) : mode === 'quick' ? (
+          /* Quick Mark List */
           <div className="space-y-2">
-            {customers.map((customer) => {
-              const data = attendance.get(customer.id)
-              const status = data?.status
-              const guestCount = data?.guest_count || 0
+            {customers.map(customer => {
+              const data = quickAttendance.get(customer.id) || { lunch: false, dinner: false, guests: 0 }
+              const mealFreq = customer.subscription?.meal_frequency
               
               return (
-                <div
-                  key={customer.id}
-                  className={`bg-white p-4 rounded-xl border-2 transition-all ${
-                    status === 'present' ? 'border-green-500 bg-green-50' :
-                    status === 'absent' ? 'border-red-400 bg-red-50' :
-                    'border-gray-100'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-semibold ${
-                      status === 'present' ? 'bg-green-500' :
-                      status === 'absent' ? 'bg-red-400' :
-                      'bg-gradient-to-br from-orange-400 to-amber-400'
-                    }`}>
-                      {status === 'present' ? <Check className="w-5 h-5" /> :
-                       status === 'absent' ? <X className="w-5 h-5" /> :
-                       customer.full_name.charAt(0).toUpperCase()}
+                <div key={customer.id} className="bg-white p-4 rounded-xl border border-gray-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-semibold">
+                      {customer.full_name.charAt(0)}
                     </div>
-                    
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{customer.full_name}</h3>
-                      <p className="text-sm text-gray-500">{customer.mobile_number}</p>
+                      <p className="text-xs text-gray-500 capitalize">{mealFreq?.replace('_', ' ') || 'No Plan'}</p>
                     </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2">
+                    {/* Lunch Button */}
+                    <button
+                      onClick={() => toggleQuickMeal(customer.id, 'lunch')}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1 ${
+                        data.lunch 
+                          ? 'bg-orange-500 text-white' 
+                          : 'bg-gray-100 text-gray-500 hover:bg-orange-100'
+                      }`}
+                    >
+                      {data.lunch && <Check className="w-4 h-4" />}
+                      Lunch
+                    </button>
                     
-                    {/* Guest Counter */}
-                    {status === 'present' && (
-                      <div className="flex items-center gap-1 mr-2">
-                        <button
-                          onClick={() => updateGuestCount(customer.id, -1)}
-                          disabled={guestCount === 0}
-                          className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center text-gray-600 disabled:opacity-30"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <div className="w-10 h-8 flex items-center justify-center">
-                          <span className={`font-semibold ${guestCount > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                            {guestCount > 0 ? `+${guestCount}` : '0'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => updateGuestCount(customer.id, 1)}
-                          className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
+                    {/* Dinner Button - only show if two_times */}
+                    {mealFreq === 'two_times' && (
+                      <button
+                        onClick={() => toggleQuickMeal(customer.id, 'dinner')}
+                        className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1 ${
+                          data.dinner 
+                            ? 'bg-purple-500 text-white' 
+                            : 'bg-gray-100 text-gray-500 hover:bg-purple-100'
+                        }`}
+                      >
+                        {data.dinner && <Check className="w-4 h-4" />}
+                        Dinner
+                      </button>
                     )}
                     
-                    <div className="flex gap-2">
+                    {/* Guest Counter */}
+                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
                       <button
-                        onClick={() => markAttendance(customer.id, 'present')}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                          status === 'present'
-                            ? 'bg-green-500 text-white'
-                            : 'bg-gray-100 text-gray-400 hover:bg-green-100 hover:text-green-500'
-                        }`}
+                        onClick={() => updateQuickGuests(customer.id, -1)}
+                        disabled={data.guests === 0}
+                        className="w-8 h-8 rounded flex items-center justify-center text-gray-500 disabled:opacity-30"
                       >
-                        <Check className="w-6 h-6" />
+                        <Minus className="w-4 h-4" />
                       </button>
+                      <span className={`w-8 text-center font-semibold ${data.guests > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
+                        {data.guests}
+                      </span>
                       <button
-                        onClick={() => markAttendance(customer.id, 'absent')}
-                        className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                          status === 'absent'
-                            ? 'bg-red-400 text-white'
-                            : 'bg-gray-100 text-gray-400 hover:bg-red-100 hover:text-red-400'
-                        }`}
+                        onClick={() => updateQuickGuests(customer.id, 1)}
+                        className="w-8 h-8 rounded flex items-center justify-center text-blue-600"
                       >
-                        <X className="w-6 h-6" />
+                        <Plus className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
@@ -357,8 +436,180 @@ export default function AttendancePage() {
               )
             })}
           </div>
+        ) : !selectedCustomer ? (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">Select a customer to view calendar</p>
+          </div>
+        ) : (
+          /* Calendar View */
+          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            {/* Month Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <button
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1))}
+                className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <h3 className="font-semibold text-gray-900">
+                {currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+              </h3>
+              <button
+                onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1))}
+                className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Weekday Headers */}
+            <div className="grid grid-cols-7 bg-gray-50">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                <div key={day} className="py-2 text-center text-xs font-medium text-gray-500">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Days */}
+            <div className="grid grid-cols-7 gap-px bg-gray-100 p-px">
+              {getDaysInMonth().map((day, idx) => {
+                if (!day) return <div key={idx} className="bg-white aspect-square" />
+
+                const dateStr = getDateStr(day)
+                const record = customerAttendance.get(dateStr)
+                const inSub = isDateInSubscription(day)
+                const future = isFutureDate(day)
+                const hasLunch = record?.lunch_taken
+                const hasDinner = record?.dinner_taken
+                const hasGuests = (record?.guest_count || 0) > 0
+                const isCancelled = record?.is_cancelled
+
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => openDayModal(day)}
+                    disabled={future || !inSub}
+                    className={`bg-white aspect-square flex flex-col items-center justify-center text-sm relative transition
+                      ${!inSub ? 'opacity-30' : ''}
+                      ${future ? 'opacity-50' : ''}
+                      ${!future && inSub ? 'hover:bg-gray-50 cursor-pointer' : ''}
+                    `}
+                  >
+                    <span className={`${isCancelled ? 'text-red-400 line-through' : ''}`}>{day}</span>
+                    
+                    {/* Indicators */}
+                    <div className="flex gap-0.5 mt-1">
+                      {hasLunch && <div className="w-2 h-2 rounded-full bg-orange-500" />}
+                      {hasDinner && <div className="w-2 h-2 rounded-full bg-purple-500" />}
+                      {hasGuests && <div className="w-2 h-2 rounded-full bg-blue-500" />}
+                      {isCancelled && <div className="w-2 h-2 rounded-full bg-red-400" />}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Legend */}
+            <div className="p-4 border-t border-gray-100 flex flex-wrap gap-4 text-xs">
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-orange-500" /> Lunch</div>
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-purple-500" /> Dinner</div>
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-blue-500" /> Guest</div>
+              <div className="flex items-center gap-1"><div className="w-3 h-3 rounded-full bg-red-400" /> Cancelled</div>
+            </div>
+          </div>
         )}
       </div>
+
+      {/* Day Modal */}
+      {showDayModal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setShowDayModal(null)}>
+          <div className="w-full max-w-lg bg-white rounded-t-3xl" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">
+                {new Date(showDayModal).toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}
+              </h2>
+              <p className="text-sm text-gray-500">{selectedCustomer?.full_name}</p>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* Meal Checkboxes */}
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={dayFormData.lunch}
+                    onChange={e => setDayFormData({ ...dayFormData, lunch: e.target.checked, cancelled: false })}
+                    className="w-5 h-5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                  />
+                  <span className="font-medium text-gray-800">🍛 Lunch</span>
+                </label>
+
+                {selectedCustomer?.subscription?.meal_frequency === 'two_times' && (
+                  <label className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={dayFormData.dinner}
+                      onChange={e => setDayFormData({ ...dayFormData, dinner: e.target.checked, cancelled: false })}
+                      className="w-5 h-5 rounded border-gray-300 text-purple-500 focus:ring-purple-500"
+                    />
+                    <span className="font-medium text-gray-800">🍽️ Dinner</span>
+                  </label>
+                )}
+              </div>
+
+              {/* Guest Counter */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+                <span className="font-medium text-gray-800">👥 Guests</span>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setDayFormData({ ...dayFormData, guests: Math.max(0, dayFormData.guests - 1) })}
+                    className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center"
+                  >
+                    <Minus className="w-4 h-4" />
+                  </button>
+                  <span className="w-8 text-center font-bold text-lg">{dayFormData.guests}</span>
+                  <button
+                    onClick={() => setDayFormData({ ...dayFormData, guests: dayFormData.guests + 1 })}
+                    className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Cancelled */}
+              <label className="flex items-center gap-3 p-4 bg-red-50 rounded-xl cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={dayFormData.cancelled}
+                  onChange={e => setDayFormData({ ...dayFormData, cancelled: e.target.checked, lunch: false, dinner: false })}
+                  className="w-5 h-5 rounded border-gray-300 text-red-500 focus:ring-red-500"
+                />
+                <span className="font-medium text-red-700">❌ Mark as Cancelled</span>
+              </label>
+
+              {/* Notes */}
+              <textarea
+                placeholder="Notes (optional)"
+                value={dayFormData.notes}
+                onChange={e => setDayFormData({ ...dayFormData, notes: e.target.value })}
+                className="w-full p-4 bg-gray-50 rounded-xl border-0 resize-none focus:ring-2 focus:ring-orange-500"
+                rows={2}
+              />
+
+              {/* Save Button */}
+              <button
+                onClick={saveDayAttendance}
+                className="w-full py-4 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-semibold"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
