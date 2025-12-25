@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { IndianRupee, Plus, Search, Calendar, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import RecordPaymentModal from './RecordPaymentModal'
+import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton'
 
 interface CustomerWithPending {
   id: string
@@ -264,9 +265,7 @@ _${vendorName}_
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+          <ListSkeleton count={4} />
         ) : activeTab === 'pending' ? (
           /* Pending List */
           filteredCustomers.length === 0 ? (

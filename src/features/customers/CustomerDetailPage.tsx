@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Phone, MessageCircle, Edit2, Calendar, IndianRupee, UtensilsCrossed, FileText, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { Skeleton } from '../../components/ui/Skeleton'
 
 interface CustomerDetail {
   id: string
@@ -123,10 +124,32 @@ export default function CustomerDetailPage() {
     return { label: 'Active', color: 'green' }
   }
 
-  if (loading) {
+    if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="bg-white border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <div className="flex-1">
+              <Skeleton className="h-5 w-32 mb-2" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <Skeleton className="w-10 h-10 rounded-xl" />
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="flex gap-3">
+            <Skeleton className="flex-1 h-12 rounded-xl" />
+            <Skeleton className="flex-1 h-12 rounded-xl" />
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" />
+          </div>
+          <Skeleton className="h-48 rounded-xl" />
+          <Skeleton className="h-40 rounded-xl" />
+        </div>
       </div>
     )
   }

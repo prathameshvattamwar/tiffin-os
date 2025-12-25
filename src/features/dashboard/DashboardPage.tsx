@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ShoppingBag, AlertCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { Skeleton, CardSkeleton } from '../../components/ui/Skeleton'
 
 interface DashboardStats {
   totalCustomers: number
@@ -138,8 +139,26 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+      <div className="min-h-screen bg-gray-50 pb-24">
+        <div className="bg-white border-b border-gray-100 px-5 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Skeleton className="h-6 w-40 mb-2" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+            <Skeleton className="w-10 h-10 rounded-full" />
+          </div>
+        </div>
+        <div className="px-5 py-4 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+          <Skeleton className="h-14 w-full rounded-xl" />
+          <Skeleton className="h-14 w-full rounded-xl" />
+        </div>
       </div>
     )
   }

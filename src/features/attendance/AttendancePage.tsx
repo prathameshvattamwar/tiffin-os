@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Check, Users, Plus, Minus, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { ListSkeleton } from '../../components/ui/Skeleton'
 
 interface Customer {
   id: string
@@ -443,9 +444,7 @@ export default function AttendancePage() {
       {/* Content */}
       <div className="px-5 py-4">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+          <ListSkeleton count={5} />
         ) : mode === 'quick' ? (
           /* Quick Mark List */
           <div className="space-y-2">
