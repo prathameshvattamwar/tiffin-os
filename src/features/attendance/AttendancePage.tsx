@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ChevronLeft, ChevronRight, Check, Users, Plus, Minus, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
@@ -29,6 +29,11 @@ export default function AttendancePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
   const [vendorId, setVendorId] = useState<string | null>(null)
+  
+  // Customer search states
+  const [customerSearch, setCustomerSearch] = useState('')
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
   
   // Quick mode states
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -61,6 +66,17 @@ export default function AttendancePage() {
       fetchCustomerAttendance()
     }
   }, [selectedCustomer, currentMonth, mode])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
 
   const fetchCustomers = async () => {
     try {
@@ -216,19 +232,19 @@ export default function AttendancePage() {
   }
 
   const isDateInSubscription = (day: number) => {
-  if (!selectedCustomer?.subscription) return true // Allow if no subscription
-  const dateStr = getDateStr(day)
-  const start = selectedCustomer.subscription.start_date
-  const end = selectedCustomer.subscription.end_date
-  return dateStr >= start && dateStr <= end
-}
+    if (!selectedCustomer?.subscription) return true
+    const dateStr = getDateStr(day)
+    const start = selectedCustomer.subscription.start_date
+    const end = selectedCustomer.subscription.end_date
+    return dateStr >= start && dateStr <= end
+  }
 
-const isFutureDate = (day: number) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const checkDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
-  return checkDate > today
-}
+  const isFutureDate = (day: number) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const checkDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
+    return checkDate > today
+  }
 
   const openDayModal = (day: number) => {
     if (isFutureDate(day) || !isDateInSubscription(day)) return
@@ -279,6 +295,19 @@ const isFutureDate = (day: number) => {
   const dinnerCount = Array.from(quickAttendance.values()).filter(a => a.dinner).length
   const guestCount = Array.from(quickAttendance.values()).reduce((sum, a) => sum + a.guests, 0)
 
+  // Filter customers for search
+  const filteredCustomers = customers.filter(c =>
+    c.full_name.toLowerCase().includes(customerSearch.toLowerCase()) ||
+    c.mobile_number.includes(customerSearch)
+  )
+
+  // Select customer handler
+  const handleSelectCustomer = (customer: Customer) => {
+    setSelectedCustomer(customer)
+    setCustomerSearch('')
+    setShowCustomerDropdown(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       
@@ -289,7 +318,7 @@ const isFutureDate = (day: number) => {
         {/* Mode Toggle */}
         <div className="flex bg-gray-100 rounded-xl p-1 mb-4">
           <button
-            onClick={() => { setMode('quick'); setSelectedCustomer(null) }}
+            onClick={() => { setMode('quick'); setSelectedCustomer(null); setCustomerSearch('') }}
             className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${
               mode === 'quick' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
             }`}
@@ -339,24 +368,74 @@ const isFutureDate = (day: number) => {
             </div>
           </>
         ) : (
-          /* Customer Selector for Calendar */
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <select
-              value={selectedCustomer?.id || ''}
-              onChange={(e) => {
-                const cust = customers.find(c => c.id === e.target.value)
-                setSelectedCustomer(cust || null)
-              }}
-              className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-xl appearance-none focus:outline-none focus:ring-2 focus:ring-orange-500"
-            >
-              <option value="">Select Customer...</option>
-              {customers.map(c => (
-                <option key={c.id} value={c.id}>
-                  {c.full_name} - {c.subscription?.meal_frequency?.replace('_', ' ') || 'No Plan'}
-                </option>
-              ))}
-            </select>
+          /* Customer Selector for Calendar - Searchable Dropdown */
+          <div className="relative" ref={dropdownRef}>
+            {/* Selected Customer Display OR Search Input */}
+            {selectedCustomer && !showCustomerDropdown ? (
+              <div 
+                onClick={() => setShowCustomerDropdown(true)}
+                className="flex items-center gap-3 p-3 bg-orange-50 border-2 border-orange-200 rounded-xl cursor-pointer"
+              >
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-semibold">
+                  {selectedCustomer.full_name.charAt(0)}
+                </div>
+                <div className="flex-1">
+                  <p className="font-semibold text-gray-900">{selectedCustomer.full_name}</p>
+                  <p className="text-xs text-gray-500 capitalize">
+                    {selectedCustomer.subscription?.meal_frequency?.replace('_', ' ') || 'No Plan'}
+                  </p>
+                </div>
+                <span className="text-xs text-orange-600 font-medium">Change</span>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search customer..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white"
+                />
+              </div>
+            )}
+
+            {/* Customer Dropdown List */}
+            {showCustomerDropdown && (
+              <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 max-h-72 overflow-y-auto z-20">
+                {filteredCustomers.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500">
+                    No customers found
+                  </div>
+                ) : (
+                  <div className="p-2 space-y-1">
+                    {filteredCustomers.map(customer => (
+                      <div
+                        key={customer.id}
+                        onClick={() => handleSelectCustomer(customer)}
+                        className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition ${
+                          selectedCustomer?.id === customer.id
+                            ? 'bg-orange-50 border-2 border-orange-200'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                          {customer.full_name.charAt(0)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{customer.full_name}</p>
+                          <p className="text-xs text-gray-500">{customer.mobile_number}</p>
+                        </div>
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full capitalize">
+                          {customer.subscription?.meal_frequency?.replace('_', ' ') || 'No Plan'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>
