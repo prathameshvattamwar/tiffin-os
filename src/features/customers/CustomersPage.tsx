@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Search, Filter, Users, Calendar, IndianRupee, ChevronRight } from 'lucide-react'
+import { Plus, Search, Filter, Users, Calendar, ChevronRight, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import AddCustomerModal from './AddCustomerModal'
 
@@ -24,7 +24,7 @@ interface CustomerWithDetails {
 }
 
 type TabType = 'monthly' | 'walk_in'
-type FilterType = 'all' | 'active' | 'expired' | 'pending'
+type FilterType = 'all' | 'active' | 'expired' | 'expiring' | 'pending' | 'clear' | 'one_time' | 'two_times'
 
 export default function CustomersPage() {
   const navigate = useNavigate()
@@ -119,25 +119,39 @@ export default function CustomersPage() {
       )
     }
 
-    // Filter by status
-    const today = new Date().toISOString().split('T')[0]
-    switch (activeFilter) {
-      case 'active':
-        filtered = filtered.filter(c => 
-          c.subscription?.status === 'active' && 
-          c.subscription?.end_date >= today
-        )
-        break
-      case 'expired':
-        filtered = filtered.filter(c => 
-          !c.subscription || 
-          c.subscription.end_date < today ||
-          c.subscription.status !== 'active'
-        )
-        break
-      case 'pending':
-        filtered = filtered.filter(c => c.pending_amount > 0)
-        break
+    // Get today's date for comparisons
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayStr = today.toISOString().split('T')[0]
+    
+    const sevenDaysLater = new Date(today)
+    sevenDaysLater.setDate(sevenDaysLater.getDate() + 7)
+    const sevenDaysStr = sevenDaysLater.toISOString().split('T')[0]
+
+    // Apply filter
+    if (activeFilter === 'active') {
+      filtered = filtered.filter(c => {
+        if (!c.subscription?.end_date) return false
+        return c.subscription.end_date >= todayStr
+      })
+    } else if (activeFilter === 'expired') {
+      filtered = filtered.filter(c => {
+        if (!c.subscription?.end_date) return true
+        return c.subscription.end_date < todayStr
+      })
+    } else if (activeFilter === 'expiring') {
+      filtered = filtered.filter(c => {
+        if (!c.subscription?.end_date) return false
+        return c.subscription.end_date >= todayStr && c.subscription.end_date <= sevenDaysStr
+      })
+    } else if (activeFilter === 'pending') {
+      filtered = filtered.filter(c => c.pending_amount > 0)
+    } else if (activeFilter === 'clear') {
+      filtered = filtered.filter(c => c.pending_amount === 0)
+    } else if (activeFilter === 'one_time') {
+      filtered = filtered.filter(c => c.subscription?.meal_frequency === 'one_time')
+    } else if (activeFilter === 'two_times') {
+      filtered = filtered.filter(c => c.subscription?.meal_frequency === 'two_times')
     }
 
     return filtered
@@ -164,6 +178,25 @@ export default function CustomersPage() {
     if (daysLeft < 0) return { label: 'Expired', color: 'red' }
     if (daysLeft <= 7) return { label: `${daysLeft}d left`, color: 'orange' }
     return { label: 'Active', color: 'green' }
+  }
+
+  const getFilterLabel = () => {
+    const labels: Record<FilterType, string> = {
+      all: 'All',
+      active: '🟢 Active',
+      expired: '🔴 Expired',
+      expiring: '🟠 Expiring',
+      pending: '💰 Pending',
+      clear: '✅ Clear',
+      one_time: '1x Meal',
+      two_times: '2x Meals'
+    }
+    return labels[activeFilter]
+  }
+
+  const handleFilterSelect = (filter: FilterType) => {
+    setActiveFilter(filter)
+    setShowFilterMenu(false)
   }
 
   return (
@@ -230,41 +263,163 @@ export default function CustomersPage() {
           <div className="relative">
             <button
               onClick={() => setShowFilterMenu(!showFilterMenu)}
-              className={`w-11 h-11 rounded-xl flex items-center justify-center transition ${
+              className={`h-11 px-3 rounded-xl flex items-center justify-center gap-2 transition ${
                 activeFilter !== 'all' 
-                  ? 'bg-orange-100 text-orange-600' 
-                  : 'bg-gray-100 text-gray-500'
+                  ? 'bg-orange-100 text-orange-600 border-2 border-orange-300' 
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'
               }`}
             >
               <Filter className="w-5 h-5" />
+              {activeFilter !== 'all' && (
+                <span className="text-sm font-medium">{getFilterLabel()}</span>
+              )}
             </button>
             
-            {/* Filter Dropdown */}
+           {/* Filter Dropdown */}
             {showFilterMenu && (
-              <div className="absolute right-0 top-12 bg-white rounded-xl shadow-lg border border-gray-100 py-2 w-40 z-20">
-                {[
-                  { value: 'all', label: 'All' },
-                  { value: 'active', label: 'Active' },
-                  { value: 'expired', label: 'Expired' },
-                  { value: 'pending', label: 'With Pending' }
-                ].map(filter => (
+              <>
+                {/* Backdrop */}
+                <div 
+                  className="fixed inset-0 z-20" 
+                  onClick={() => setShowFilterMenu(false)}
+                />
+                
+                {/* Menu */}
+                <div className="absolute right-0 top-14 bg-white rounded-xl shadow-xl border border-gray-100 py-2 w-52 z-30">
+                  
+                  {/* Clear Filter */}
+                  {activeFilter !== 'all' && (
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setActiveFilter('all')
+                          setShowFilterMenu(false)
+                        }}
+                        className="w-full px-4 py-2 text-left text-sm text-red-500 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <X className="w-4 h-4" />
+                        Clear Filter
+                      </button>
+                      <div className="border-t border-gray-100 my-2"></div>
+                    </>
+                  )}
+                  
+                  {/* Status Filters */}
+                  <p className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase">Status</p>
                   <button
-                    key={filter.value}
-                    onClick={() => {
-                      setActiveFilter(filter.value as FilterType)
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('active')
                       setShowFilterMenu(false)
                     }}
-                    className={`w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
-                      activeFilter === filter.value ? 'text-orange-600 font-medium' : 'text-gray-700'
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'active' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
                     }`}
                   >
-                    {filter.label}
+                    🟢 Active
                   </button>
-                ))}
-              </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('expired')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'expired' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    🔴 Expired
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('expiring')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'expiring' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    🟠 Expiring Soon
+                  </button>
+                  
+                  {/* Payment Filters */}
+                  <div className="border-t border-gray-100 my-2"></div>
+                  <p className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase">Payment</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('pending')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'pending' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    💰 With Pending
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('clear')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'clear' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    ✅ No Pending
+                  </button>
+                  
+                  {/* Meal Plan Filters */}
+                  <div className="border-t border-gray-100 my-2"></div>
+                  <p className="px-4 py-1 text-xs font-semibold text-gray-400 uppercase">Meal Plan</p>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('one_time')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'one_time' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    🍽️ One Time
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setActiveFilter('two_times')
+                      setShowFilterMenu(false)
+                    }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-gray-50 ${
+                      activeFilter === 'two_times' ? 'text-orange-600 font-medium bg-orange-50' : 'text-gray-700'
+                    }`}
+                  >
+                    🍽️🍽️ Two Times
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
+
+        {/* Active Filter Badge */}
+        {activeFilter !== 'all' && (
+          <div className="mt-3 flex items-center gap-2">
+            <span className="text-xs text-gray-500">Filtered by:</span>
+            <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full font-medium">
+              {getFilterLabel()}
+            </span>
+            <button 
+              onClick={() => setActiveFilter('all')}
+              className="text-xs text-gray-400 hover:text-gray-600"
+            >
+              Clear
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Customer List */}
@@ -279,12 +434,12 @@ export default function CustomersPage() {
               <Users className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-800 mb-1">
-              {searchQuery ? 'No results found' : 'No customers yet'}
+              {searchQuery || activeFilter !== 'all' ? 'No results found' : 'No customers yet'}
             </h3>
             <p className="text-gray-500 mb-4">
-              {searchQuery ? 'Try a different search' : 'Add your first customer to get started'}
+              {searchQuery ? 'Try a different search' : activeFilter !== 'all' ? 'Try a different filter' : 'Add your first customer to get started'}
             </p>
-            {!searchQuery && (
+            {!searchQuery && activeFilter === 'all' && (
               <button
                 onClick={() => setShowAddModal(true)}
                 className="bg-orange-500 text-white px-6 py-2 rounded-xl font-medium"
@@ -295,6 +450,11 @@ export default function CustomersPage() {
           </div>
         ) : (
           <div className="space-y-3">
+            {/* Results Count */}
+            <p className="text-xs text-gray-400 mb-2">
+              Showing {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
+            </p>
+            
             {filteredCustomers.map((customer) => {
               const status = getSubscriptionStatus(customer)
               
@@ -342,7 +502,7 @@ export default function CustomersPage() {
                             {formatDate(customer.subscription.end_date)}
                           </span>
                           <span className="text-gray-500 capitalize">
-                            {customer.subscription.meal_frequency.replace('_', ' ')}
+                            {customer.subscription.meal_frequency?.replace('_', ' ') || 'N/A'}
                           </span>
                         </div>
                       )}
@@ -376,14 +536,6 @@ export default function CustomersPage() {
             setShowAddModal(false)
             fetchCustomers()
           }}
-        />
-      )}
-
-      {/* Click outside to close filter */}
-      {showFilterMenu && (
-        <div 
-          className="fixed inset-0 z-10" 
-          onClick={() => setShowFilterMenu(false)}
         />
       )}
     </div>
