@@ -48,52 +48,64 @@ export default function DashboardPage() {
         .eq('vendor_id', vendor.id)
         .eq('is_active', true)
 
-      // 2. Get all subscriptions and payments for pending calculation
+      // 2. Get all subscriptions
       const { data: subscriptions } = await supabase
         .from('subscriptions')
         .select('id, customer_id, plan_amount, end_date, status')
         .eq('vendor_id', vendor.id)
         .eq('status', 'active')
 
+      // 3. Get all payments
       const { data: payments } = await supabase
         .from('payments')
         .select('customer_id, amount, payment_date')
         .eq('vendor_id', vendor.id)
 
-      // Calculate total pending
-      let totalPending = 0
-      let expiringCount = 0
+      // 4. Get all attendance for guest charges
+      const { data: attendanceData } = await supabase
+        .from('attendance')
+        .select('customer_id, guest_count, lunch_taken, dinner_taken, attendance_date')
+        .eq('vendor_id', vendor.id)
+
+      // Calculate stats
       const today = new Date()
+      const todayStr = today.toISOString().split('T')[0]
       const sevenDaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
 
+      let totalPending = 0
+      let expiringCount = 0
+
+      // Calculate pending for each subscription
       subscriptions?.forEach(sub => {
+        // Customer payments
         const customerPayments = payments?.filter(p => p.customer_id === sub.customer_id) || []
         const totalPaid = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-        const pending = Math.max(0, Number(sub.plan_amount) - totalPaid)
+        
+        // Guest charges (₹40 per guest)
+        const customerAttendance = attendanceData?.filter(a => a.customer_id === sub.customer_id) || []
+        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
+        const guestCharges = totalGuests * 40
+        
+        // Pending amount
+        const pending = Math.max(0, Number(sub.plan_amount) + guestCharges - totalPaid)
         totalPending += pending
 
-        // Check expiring
+        // Check expiring subscriptions
         const endDate = new Date(sub.end_date)
         if (endDate <= sevenDaysLater && endDate >= today) {
           expiringCount++
         }
       })
 
-      // 3. Today's Meals (lunch + dinner)
-      const todayStr = today.toISOString().split('T')[0]
-      const { data: todayAttendance } = await supabase
-        .from('attendance')
-        .select('lunch_taken, dinner_taken')
-        .eq('vendor_id', vendor.id)
-        .eq('attendance_date', todayStr)
-
+      // Today's Meals (lunch + dinner)
+      const todayAttendance = attendanceData?.filter(a => a.attendance_date === todayStr) || []
       let todayMeals = 0
-      todayAttendance?.forEach(a => {
+      todayAttendance.forEach(a => {
         if (a.lunch_taken) todayMeals++
         if (a.dinner_taken) todayMeals++
       })
 
-      // 4. This Month Collection
+      // This Month Collection
       const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
       const thisMonthPayments = payments?.filter(p => p.payment_date >= firstOfMonth) || []
       const thisMonthCollection = thisMonthPayments.reduce((sum, p) => sum + Number(p.amount), 0)

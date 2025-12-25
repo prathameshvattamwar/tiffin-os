@@ -21,6 +21,7 @@ interface CustomerWithDetails {
   }
   pending_amount: number
   total_paid: number
+  guest_charges: number
 }
 
 type TabType = 'monthly' | 'walk_in'
@@ -73,6 +74,12 @@ export default function CustomersPage() {
         .select('customer_id, amount')
         .eq('vendor_id', vendor.id)
 
+      // Fetch all attendance for guest charges
+      const { data: attendanceData } = await supabase
+        .from('attendance')
+        .select('customer_id, guest_count')
+        .eq('vendor_id', vendor.id)
+
       // Combine data
       const customersWithDetails: CustomerWithDetails[] = (customersData || []).map(customer => {
         // Get latest subscription for customer
@@ -85,14 +92,21 @@ export default function CustomersPage() {
         // Calculate payments
         const customerPayments = paymentsData?.filter(p => p.customer_id === customer.id) || []
         const totalPaid = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0)
+        
+        // Calculate guest charges (₹40 per guest)
+        const customerAttendance = attendanceData?.filter(a => a.customer_id === customer.id) || []
+        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
+        const guestCharges = totalGuests * 40
+
         const planAmount = latestSub?.plan_amount || 0
-        const pendingAmount = Math.max(0, planAmount - totalPaid)
+        const pendingAmount = Math.max(0, planAmount + guestCharges - totalPaid)
 
         return {
           ...customer,
           subscription: latestSub,
           pending_amount: pendingAmount,
-          total_paid: totalPaid
+          total_paid: totalPaid,
+          guest_charges: guestCharges
         }
       })
 
@@ -194,11 +208,6 @@ export default function CustomersPage() {
     return labels[activeFilter]
   }
 
-  const handleFilterSelect = (filter: FilterType) => {
-    setActiveFilter(filter)
-    setShowFilterMenu(false)
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       
@@ -275,7 +284,7 @@ export default function CustomersPage() {
               )}
             </button>
             
-           {/* Filter Dropdown */}
+            {/* Filter Dropdown */}
             {showFilterMenu && (
               <>
                 {/* Backdrop */}
@@ -450,7 +459,6 @@ export default function CustomersPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {/* Results Count */}
             <p className="text-xs text-gray-400 mb-2">
               Showing {filteredCustomers.length} customer{filteredCustomers.length !== 1 ? 's' : ''}
             </p>
@@ -469,7 +477,6 @@ export default function CustomersPage() {
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    {/* Avatar */}
                     <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold ${
                       status.color === 'red' ? 'bg-red-400' :
                       status.color === 'orange' ? 'bg-orange-400' :
@@ -478,7 +485,6 @@ export default function CustomersPage() {
                       {customer.full_name.charAt(0).toUpperCase()}
                     </div>
 
-                    {/* Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-gray-900 truncate">{customer.full_name}</h3>
@@ -494,7 +500,6 @@ export default function CustomersPage() {
                       
                       <p className="text-sm text-gray-500 mb-2">{customer.mobile_number}</p>
                       
-                      {/* Subscription Info */}
                       {customer.subscription && (
                         <div className="flex flex-wrap gap-3 text-xs">
                           <span className="flex items-center gap-1 text-gray-500">
@@ -508,7 +513,6 @@ export default function CustomersPage() {
                       )}
                     </div>
 
-                    {/* Pending + Arrow */}
                     <div className="text-right flex items-center gap-2">
                       {customer.pending_amount > 0 && (
                         <div>
@@ -528,7 +532,6 @@ export default function CustomersPage() {
         )}
       </div>
 
-      {/* Add Customer Modal */}
       {showAddModal && (
         <AddCustomerModal
           onClose={() => setShowAddModal(false)}

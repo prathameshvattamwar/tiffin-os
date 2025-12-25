@@ -14,6 +14,7 @@ interface CustomerWithPending {
   }
   total_paid: number
   pending_amount: number
+  guest_charges: number
 }
 
 interface PaymentRecord {
@@ -94,11 +95,22 @@ export default function PaymentsPage() {
         .order('payment_date', { ascending: false })
         .limit(50)
 
+      // Fetch attendance for guest charges
+      const { data: attendanceData } = await supabase
+        .from('attendance')
+        .select('customer_id, guest_count')
+        .eq('vendor_id', vendor.id)
+
       // Calculate pending for each customer
       const customersWithPending: CustomerWithPending[] = (customersData || []).map((c: any) => {
         const customerPayments = (paymentsData || []).filter((p: any) => p.customer_id === c.id)
         const totalPaid = customerPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
         const planAmount = c.subscriptions?.[0]?.plan_amount || 0
+        
+        // Guest charges (₹40 per guest)
+        const customerAttendance = attendanceData?.filter(a => a.customer_id === c.id) || []
+        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
+        const guestCharges = totalGuests * 40
         
         return {
           id: c.id,
@@ -107,7 +119,8 @@ export default function PaymentsPage() {
           whatsapp_number: c.whatsapp_number,
           subscription: c.subscriptions?.[0],
           total_paid: totalPaid,
-          pending_amount: Math.max(0, planAmount - totalPaid)
+          pending_amount: Math.max(0, planAmount + guestCharges - totalPaid),
+          guest_charges: guestCharges
         }
       })
 
@@ -150,6 +163,7 @@ Hi ${customer.full_name},
 This is a friendly reminder from *${vendorName}*.
 
 Your pending amount is: *₹${customer.pending_amount.toLocaleString()}*
+${customer.guest_charges > 0 ? `(Includes ₹${customer.guest_charges} guest charges)` : ''}
 
 Please clear your dues at your earliest convenience.
 
@@ -279,6 +293,9 @@ _${vendorName}_
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{customer.full_name}</h3>
                       <p className="text-sm text-gray-500">{customer.mobile_number}</p>
+                      {customer.guest_charges > 0 && (
+                        <p className="text-xs text-blue-500">+₹{customer.guest_charges} guest charges</p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-red-500">₹{customer.pending_amount.toLocaleString()}</p>
