@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Filter, Users, Calendar, ChevronRight, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import AddCustomerModal from './AddCustomerModal'
+import { ListSkeleton } from '../../components/ui/Skeleton'
 
 interface CustomerWithDetails {
   id: string
@@ -434,9 +435,7 @@ export default function CustomersPage() {
       {/* Customer List */}
       <div className="px-5 py-4">
         {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
-          </div>
+          <ListSkeleton count={5} />
         ) : filteredCustomers.length === 0 ? (
           <div className="text-center py-12">
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">

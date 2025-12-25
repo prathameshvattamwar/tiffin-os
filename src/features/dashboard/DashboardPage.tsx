@@ -133,9 +133,7 @@ export default function DashboardPage() {
   }
 
   const formatAmount = (amount: number) => {
-    if (amount >= 100000) return `₹${(amount / 100000).toFixed(1)}L`
-    if (amount >= 1000) return `₹${(amount / 1000).toFixed(1)}K`
-    return `₹${amount}`
+    return `₹${amount.toLocaleString('en-IN')}`
   }
 
   if (loading) {

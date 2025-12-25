@@ -1,65 +1,70 @@
 import { useState, useEffect } from 'react'
-import { User, Building2, Phone, LogOut, ChevronRight, Shield, Bell, HelpCircle } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 import { useNavigate } from 'react-router-dom'
+import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard } from 'lucide-react'
+import { supabase } from '../../lib/supabase'
 
 interface VendorProfile {
+  id: string
   business_name: string
   owner_name: string
   mobile_number: string
-  whatsapp_number: string
+  email?: string
   business_type: string
-  address: string
 }
 
 export default function SettingsPage() {
   const navigate = useNavigate()
-  const [profile, setProfile] = useState<VendorProfile | null>(null)
-  const [userEmail, setUserEmail] = useState<string>('')
+  const [vendor, setVendor] = useState<VendorProfile | null>(null)
   const [loading, setLoading] = useState(true)
-  const [loggingOut, setLoggingOut] = useState(false)
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false)
+  const [notifications, setNotifications] = useState({
+    payment_reminders: true,
+    expiry_alerts: true,
+    daily_summary: false
+  })
 
   useEffect(() => {
-    fetchProfile()
+    fetchVendor()
+    loadNotificationSettings()
   }, [])
 
-  const fetchProfile = async () => {
+  const fetchVendor = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      setUserEmail(user.email || '')
-
-      const { data: vendor } = await supabase
+      const { data } = await supabase
         .from('vendors')
         .select('*')
         .eq('auth_user_id', user.id)
         .single()
 
-      if (vendor) {
-        setProfile(vendor)
+      if (data) {
+        setVendor({ ...data, email: user.email })
       }
     } catch (error) {
-      console.error('Error fetching profile:', error)
+      console.error('Error:', error)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleLogout = async () => {
-    const confirm = window.confirm('Are you sure you want to logout?')
-    if (!confirm) return
-
-    setLoggingOut(true)
-    try {
-      await supabase.auth.signOut()
-      navigate('/login')
-    } catch (error) {
-      console.error('Logout error:', error)
-      alert('Failed to logout. Please try again.')
-    } finally {
-      setLoggingOut(false)
+  const loadNotificationSettings = () => {
+    const saved = localStorage.getItem('tiffinos_notifications')
+    if (saved) {
+      setNotifications(JSON.parse(saved))
     }
+  }
+
+  const toggleNotification = (key: keyof typeof notifications) => {
+    const updated = { ...notifications, [key]: !notifications[key] }
+    setNotifications(updated)
+    localStorage.setItem('tiffinos_notifications', JSON.stringify(updated))
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut()
+    navigate('/login')
   }
 
   if (loading) {
@@ -78,129 +83,224 @@ export default function SettingsPage() {
         <h1 className="text-lg font-bold text-gray-900">Settings</h1>
       </div>
 
-      <div className="px-5 py-6 space-y-6">
+      <div className="px-5 py-4 space-y-4">
 
         {/* Profile Card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-5 bg-gradient-to-r from-orange-500 to-amber-500">
-            <div className="flex items-center gap-4">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur rounded-full flex items-center justify-center">
-                <span className="text-2xl font-bold text-white">
-                  {profile?.owner_name?.charAt(0)?.toUpperCase() || 'U'}
-                </span>
-              </div>
-              <div className="text-white">
-                <h2 className="text-xl font-bold">{profile?.owner_name || 'User'}</h2>
-                <p className="text-orange-100 text-sm">{userEmail}</p>
-              </div>
+        <div 
+          onClick={() => navigate('/settings/profile')}
+          className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 text-white cursor-pointer"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center text-2xl font-bold">
+              {vendor?.owner_name?.charAt(0) || 'U'}
             </div>
-          </div>
-          
-          <div className="p-4 space-y-3">
-            <div className="flex items-center gap-3 py-2">
-              <Building2 className="w-5 h-5 text-gray-400" />
-              <div className="flex-1">
-                <p className="text-xs text-gray-400">Business Name</p>
-                <p className="font-medium text-gray-800">{profile?.business_name || '-'}</p>
-              </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold">{vendor?.owner_name || 'User'}</h2>
+              <p className="text-white/80 text-sm">{vendor?.business_name}</p>
+              <p className="text-white/60 text-xs mt-1">{vendor?.email}</p>
             </div>
-            <div className="flex items-center gap-3 py-2 border-t border-gray-100">
-              <Phone className="w-5 h-5 text-gray-400" />
-              <div className="flex-1">
-                <p className="text-xs text-gray-400">Mobile</p>
-                <p className="font-medium text-gray-800">{profile?.mobile_number || '-'}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 py-2 border-t border-gray-100">
-              <span className="text-lg">📍</span>
-              <div className="flex-1">
-                <p className="text-xs text-gray-400">Business Type</p>
-                <p className="font-medium text-gray-800 capitalize">{profile?.business_type || '-'}</p>
-              </div>
-            </div>
+            <ChevronRight className="w-6 h-6 text-white/60" />
           </div>
         </div>
 
-        {/* Menu Items */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <button 
-            onClick={() => navigate('/settings/menu')}
-            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
-          >
-            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <span className="text-xl">🍽️</span>
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-medium text-gray-800">Menu Management</p>
-              <p className="text-xs text-gray-400">Add items with pricing</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-300" />
-          </button>
+        {/* Business Options */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Business</p>
+          
           <button 
             onClick={() => navigate('/settings/profile')}
-            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
           >
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
               <User className="w-5 h-5 text-blue-600" />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium text-gray-800">Edit Profile</p>
-              <p className="text-xs text-gray-400">Update your business details</p>
+              <p className="font-medium text-gray-900">Edit Profile</p>
+              <p className="text-xs text-gray-500">Business info, contact details</p>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
 
-          <button className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-t border-gray-100">
-            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
-              <Bell className="w-5 h-5 text-purple-600" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-medium text-gray-800">Notifications</p>
-              <p className="text-xs text-gray-400">Manage notification preferences</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-300" />
-          </button>
-
-          <button className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-t border-gray-100">
-            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-              <Shield className="w-5 h-5 text-green-600" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-medium text-gray-800">Privacy & Security</p>
-              <p className="text-xs text-gray-400">Manage your data and security</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-300" />
-          </button>
-
-          <button className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-t border-gray-100">
+          <button 
+            onClick={() => navigate('/settings/menu')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+          >
             <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-              <HelpCircle className="w-5 h-5 text-orange-600" />
+              <UtensilsCrossed className="w-5 h-5 text-orange-600" />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium text-gray-800">Help & Support</p>
-              <p className="text-xs text-gray-400">Get help or contact us</p>
+              <p className="font-medium text-gray-900">Menu Management</p>
+              <p className="text-xs text-gray-500">Add, edit menu items & prices</p>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
 
+          <button 
+            onClick={() => alert('Coming Soon! Subscription plans will be available shortly.')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
+          >
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <CreditCard className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Subscription</p>
+              <p className="text-xs text-gray-500">Manage your TiffinOS plan</p>
+            </div>
+            <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded-full">Free</span>
+          </button>
         </div>
 
-        {/* Logout Button */}
+        {/* Notifications */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Notifications</p>
+          
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Payment Reminders</p>
+                  <p className="text-xs text-gray-500">Get notified for pending payments</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleNotification('payment_reminders')}
+                className={`w-12 h-7 rounded-full transition-colors ${
+                  notifications.payment_reminders ? 'bg-orange-500' : 'bg-gray-300'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                  notifications.payment_reminders ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4 border-b border-gray-100">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Expiry Alerts</p>
+                  <p className="text-xs text-gray-500">Subscription expiry notifications</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleNotification('expiry_alerts')}
+                className={`w-12 h-7 rounded-full transition-colors ${
+                  notifications.expiry_alerts ? 'bg-orange-500' : 'bg-gray-300'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                  notifications.expiry_alerts ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          <div className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Bell className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-medium text-gray-900">Daily Summary</p>
+                  <p className="text-xs text-gray-500">End of day reports</p>
+                </div>
+              </div>
+              <button
+                onClick={() => toggleNotification('daily_summary')}
+                className={`w-12 h-7 rounded-full transition-colors ${
+                  notifications.daily_summary ? 'bg-orange-500' : 'bg-gray-300'
+                }`}
+              >
+                <div className={`w-5 h-5 bg-white rounded-full shadow transform transition-transform ${
+                  notifications.daily_summary ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Other Options */}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Support</p>
+          
+          <button 
+            onClick={() => window.open('https://wa.me/919271981229?text=Hi, I need help with TiffinOS', '_blank')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+          >
+            <div className="w-10 h-10 bg-teal-100 rounded-xl flex items-center justify-center">
+              <HelpCircle className="w-5 h-5 text-teal-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Help & Support</p>
+              <p className="text-xs text-gray-500">Contact us on WhatsApp</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+
+          <button 
+            onClick={() => alert('Privacy Policy: Your data is secure and never shared with third parties.')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
+          >
+            <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
+              <Shield className="w-5 h-5 text-gray-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Privacy & Security</p>
+              <p className="text-xs text-gray-500">Data protection info</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+        </div>
+
+        {/* Logout */}
         <button
-          onClick={handleLogout}
-          disabled={loggingOut}
-          className="w-full flex items-center justify-center gap-2 p-4 bg-white rounded-2xl border border-red-200 text-red-500 font-semibold hover:bg-red-50 transition disabled:opacity-50"
+          onClick={() => setShowLogoutConfirm(true)}
+          className="w-full flex items-center gap-4 p-4 bg-white rounded-2xl border border-gray-100 hover:bg-red-50 transition"
         >
-          <LogOut className="w-5 h-5" />
-          {loggingOut ? 'Logging out...' : 'Logout'}
+          <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+            <LogOut className="w-5 h-5 text-red-600" />
+          </div>
+          <p className="font-medium text-red-600">Logout</p>
         </button>
 
         {/* App Version */}
-        <p className="text-center text-xs text-gray-400">
+        <p className="text-center text-xs text-gray-400 pt-4">
           TiffinOS v1.0.0 • Made with ❤️ in Pune
         </p>
 
       </div>
+
+      {/* Logout Confirmation */}
+      {showLogoutConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5" onClick={() => setShowLogoutConfirm(false)}>
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm" onClick={e => e.stopPropagation()}>
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Logout?</h3>
+            <p className="text-gray-500 mb-6">Are you sure you want to logout from TiffinOS?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 py-3 bg-red-500 text-white rounded-xl font-semibold"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
