@@ -1,29 +1,27 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ChevronRight, ShoppingBag} from 'lucide-react'
+import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ShoppingBag, AlertCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
-
 
 interface DashboardStats {
   totalCustomers: number
   totalPending: number
   todayMeals: number
-  monthRevenue: number
-  vendorName: string
-  businessName: string
+  thisMonthCollection: number
+  expiringCount: number
 }
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const [loading, setLoading] = useState(true)
+  const [vendorName, setVendorName] = useState('')
   const [stats, setStats] = useState<DashboardStats>({
     totalCustomers: 0,
     totalPending: 0,
     todayMeals: 0,
-    monthRevenue: 0,
-    vendorName: '',
-    businessName: ''
+    thisMonthCollection: 0,
+    expiringCount: 0
   })
-  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     fetchDashboardData()
@@ -34,72 +32,78 @@ export default function DashboardPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      // Get vendor info
       const { data: vendor } = await supabase
         .from('vendors')
-        .select('id, owner_name, business_name')
+        .select('id, business_name, owner_name')
         .eq('auth_user_id', user.id)
         .single()
 
       if (!vendor) return
+      setVendorName(vendor.business_name || vendor.owner_name || 'User')
 
-      // Get total active customers
+      // 1. Total Active Customers
       const { count: customerCount } = await supabase
         .from('customers')
         .select('*', { count: 'exact', head: true })
         .eq('vendor_id', vendor.id)
         .eq('is_active', true)
 
-      // Get active subscriptions with plan amounts
+      // 2. Get all subscriptions and payments for pending calculation
       const { data: subscriptions } = await supabase
         .from('subscriptions')
-        .select('id, plan_amount, customer_id')
+        .select('id, customer_id, plan_amount, end_date, status')
         .eq('vendor_id', vendor.id)
         .eq('status', 'active')
 
-      // Get all payments for this vendor
       const { data: payments } = await supabase
         .from('payments')
-        .select('amount, customer_id, payment_date')
+        .select('customer_id, amount, payment_date')
         .eq('vendor_id', vendor.id)
 
       // Calculate total pending
       let totalPending = 0
+      let expiringCount = 0
+      const today = new Date()
+      const sevenDaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
+
       subscriptions?.forEach(sub => {
         const customerPayments = payments?.filter(p => p.customer_id === sub.customer_id) || []
         const totalPaid = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-        totalPending += Math.max(0, Number(sub.plan_amount) - totalPaid)
+        const pending = Math.max(0, Number(sub.plan_amount) - totalPaid)
+        totalPending += pending
+
+        // Check expiring
+        const endDate = new Date(sub.end_date)
+        if (endDate <= sevenDaysLater && endDate >= today) {
+          expiringCount++
+        }
       })
 
-      // Get today's attendance count
-      const today = new Date().toISOString().split('T')[0]
-      const { count: todayMeals } = await supabase
+      // 3. Today's Meals (lunch + dinner)
+      const todayStr = today.toISOString().split('T')[0]
+      const { data: todayAttendance } = await supabase
         .from('attendance')
-        .select('*', { count: 'exact', head: true })
+        .select('lunch_taken, dinner_taken')
         .eq('vendor_id', vendor.id)
-        .eq('attendance_date', today)
-        .eq('meal_taken', 'present')
+        .eq('attendance_date', todayStr)
 
-      // Get this month's revenue
-      const firstOfMonth = new Date()
-      firstOfMonth.setDate(1)
-      const monthStart = firstOfMonth.toISOString().split('T')[0]
-      
-      const { data: monthPayments } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('vendor_id', vendor.id)
-        .gte('payment_date', monthStart)
+      let todayMeals = 0
+      todayAttendance?.forEach(a => {
+        if (a.lunch_taken) todayMeals++
+        if (a.dinner_taken) todayMeals++
+      })
 
-      const monthRevenue = monthPayments?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+      // 4. This Month Collection
+      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+      const thisMonthPayments = payments?.filter(p => p.payment_date >= firstOfMonth) || []
+      const thisMonthCollection = thisMonthPayments.reduce((sum, p) => sum + Number(p.amount), 0)
 
       setStats({
         totalCustomers: customerCount || 0,
         totalPending,
-        todayMeals: todayMeals || 0,
-        monthRevenue,
-        vendorName: vendor.owner_name,
-        businessName: vendor.business_name
+        todayMeals,
+        thisMonthCollection,
+        expiringCount
       })
 
     } catch (error) {
@@ -111,9 +115,9 @@ export default function DashboardPage() {
 
   const getGreeting = () => {
     const hour = new Date().getHours()
-    if (hour < 12) return 'Good Morning'
-    if (hour < 17) return 'Good Afternoon'
-    return 'Good Evening'
+    if (hour < 12) return 'Good Morning! 👋'
+    if (hour < 17) return 'Good Afternoon! ☀️'
+    return 'Good Evening! 🌙'
   }
 
   const formatAmount = (amount: number) => {
@@ -134,81 +138,92 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-gray-50 pb-24">
       
       {/* Header */}
-      <div className="bg-white border-b border-gray-100 px-5 py-4 sticky top-0 z-10">
+      <div className="bg-white border-b border-gray-100 px-5 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold text-gray-900">{getGreeting()}! 👋</h1>
-            <p className="text-sm text-gray-500">{stats.businessName}</p>
+            <h1 className="text-lg font-bold text-gray-900">{getGreeting()}</h1>
+            <p className="text-gray-500">{vendorName}</p>
           </div>
-          <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-amber-500 rounded-full flex items-center justify-center text-white font-semibold">
-            {stats.vendorName.charAt(0).toUpperCase()}
+          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-bold">
+            {vendorName.charAt(0).toUpperCase()}
           </div>
         </div>
       </div>
 
-      <div className="px-5 py-6 space-y-6">
+      <div className="px-5 py-4 space-y-4">
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-4">
+        {/* Expiring Alert */}
+        {stats.expiringCount > 0 && (
           <div 
             onClick={() => navigate('/customers')}
-            className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition"
+            className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center gap-3 cursor-pointer"
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-blue-600" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
+            <div className="w-10 h-10 bg-orange-100 rounded-full flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-orange-500" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-orange-800">{stats.expiringCount} subscription{stats.expiringCount > 1 ? 's' : ''} expiring soon</p>
+              <p className="text-sm text-orange-600">Tap to view and renew</p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 gap-3">
+          <div 
+            onClick={() => navigate('/customers')}
+            className="bg-white p-4 rounded-xl border border-gray-100 cursor-pointer hover:shadow-md transition"
+          >
+            <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center mb-3">
+              <Users className="w-5 h-5 text-blue-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900">{stats.totalCustomers}</p>
-            <p className="text-sm text-gray-500">Customers</p>
+            <p className="text-sm text-gray-500">Total Customers</p>
           </div>
 
           <div 
             onClick={() => navigate('/payments')}
-            className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition"
+            className="bg-white p-4 rounded-xl border border-gray-100 cursor-pointer hover:shadow-md transition"
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                <IndianRupee className="w-5 h-5 text-red-600" />
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-300" />
+            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center mb-3">
+              <IndianRupee className="w-5 h-5 text-red-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatAmount(stats.totalPending)}</p>
-            <p className="text-sm text-gray-500">Pending</p>
+            <p className={`text-2xl font-bold ${stats.totalPending > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+              {formatAmount(stats.totalPending)}
+            </p>
+            <p className="text-sm text-gray-500">Total Pending</p>
           </div>
 
           <div 
             onClick={() => navigate('/track')}
-            className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition"
+            className="bg-white p-4 rounded-xl border border-gray-100 cursor-pointer hover:shadow-md transition"
           >
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
-                <UtensilsCrossed className="w-5 h-5 text-orange-600" />
-              </div>
+            <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center mb-3">
+              <UtensilsCrossed className="w-5 h-5 text-orange-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900">{stats.todayMeals}</p>
             <p className="text-sm text-gray-500">Today's Meals</p>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-            <div className="flex items-center justify-between mb-3">
-              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
+          <div 
+            onClick={() => navigate('/payments')}
+            className="bg-white p-4 rounded-xl border border-gray-100 cursor-pointer hover:shadow-md transition"
+          >
+            <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-3">
+              <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{formatAmount(stats.monthRevenue)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatAmount(stats.thisMonthCollection)}</p>
             <p className="text-sm text-gray-500">This Month</p>
           </div>
         </div>
 
         {/* Quick Actions */}
         <div>
-          <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Quick Actions</h2>
-          <div className="space-y-3">
+          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Quick Actions</p>
+          <div className="space-y-2">
             <button 
               onClick={() => navigate('/track')}
-              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white p-4 rounded-xl font-semibold hover:shadow-lg hover:shadow-orange-200 transition-all flex items-center justify-center gap-2"
+              className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white p-4 rounded-xl font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2"
             >
               <CalendarCheck className="w-5 h-5" />
               Mark Today's Attendance
@@ -232,10 +247,10 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Tips Card */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-5 border border-blue-100">
-          <h3 className="font-semibold text-gray-800 mb-2">💡 Quick Tip</h3>
-          <p className="text-sm text-gray-600">
+        {/* Quick Tip */}
+        <div className="bg-amber-50 rounded-xl p-4 border border-amber-100">
+          <p className="font-semibold text-amber-800 mb-1">💡 Quick Tip</p>
+          <p className="text-sm text-amber-700">
             Mark attendance daily to keep accurate records. You can also send payment reminders via WhatsApp directly from the Payments tab.
           </p>
         </div>

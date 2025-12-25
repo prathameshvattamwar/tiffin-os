@@ -136,7 +136,10 @@ export default function SettingsPage() {
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
-          <button className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition">
+          <button 
+            onClick={() => navigate('/settings/profile')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
+          >
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
               <User className="w-5 h-5 text-blue-600" />
             </div>

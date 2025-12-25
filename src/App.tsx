@@ -13,6 +13,7 @@ import CustomerDetailPage from './features/customers/CustomerDetailPage'
 import ReportPage from './features/reports/ReportPage'
 import MenuManagementPage from './features/settings/MenuManagementPage'
 import QuickSalePage from './features/sales/QuickSalePage'
+import EditProfilePage from './features/settings/EditProfilePage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -161,6 +162,15 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <QuickSalePage />
+          }
+        />
+
+        <Route
+          path="/settings/profile"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <EditProfilePage />
           }
         />
 

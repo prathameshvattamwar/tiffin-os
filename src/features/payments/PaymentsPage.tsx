@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { IndianRupee, Plus, Search, Calendar, User, TrendingUp, TrendingDown } from 'lucide-react'
+import { IndianRupee, Plus, Search, Calendar, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import RecordPaymentModal from './RecordPaymentModal'
 
@@ -7,6 +7,7 @@ interface CustomerWithPending {
   id: string
   full_name: string
   mobile_number: string
+  whatsapp_number?: string
   subscription?: {
     id: string
     plan_amount: number
@@ -35,6 +36,7 @@ export default function PaymentsPage() {
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithPending | null>(null)
   const [vendorId, setVendorId] = useState<string | null>(null)
+  const [vendorName, setVendorName] = useState('')
 
   useEffect(() => {
     fetchData()
@@ -48,12 +50,13 @@ export default function PaymentsPage() {
 
       const { data: vendor } = await supabase
         .from('vendors')
-        .select('id')
+        .select('id, business_name')
         .eq('auth_user_id', user.id)
         .single()
 
       if (!vendor) return
       setVendorId(vendor.id)
+      setVendorName(vendor.business_name)
 
       // Fetch customers with active subscriptions
       const { data: customersData } = await supabase
@@ -62,6 +65,7 @@ export default function PaymentsPage() {
           id,
           full_name,
           mobile_number,
+          whatsapp_number,
           subscriptions!inner (
             id,
             plan_amount,
@@ -100,6 +104,7 @@ export default function PaymentsPage() {
           id: c.id,
           full_name: c.full_name,
           mobile_number: c.mobile_number,
+          whatsapp_number: c.whatsapp_number,
           subscription: c.subscriptions?.[0],
           total_paid: totalPaid,
           pending_amount: Math.max(0, planAmount - totalPaid)
@@ -132,6 +137,32 @@ export default function PaymentsPage() {
   const openPaymentModal = (customer: CustomerWithPending) => {
     setSelectedCustomer(customer)
     setShowPaymentModal(true)
+  }
+
+  const sendWhatsAppReminder = (customer: CustomerWithPending) => {
+    const phone = customer.whatsapp_number || customer.mobile_number
+    const message = `
+🔔 *Payment Reminder*
+━━━━━━━━━━━━━━━━━━
+
+Hi ${customer.full_name},
+
+This is a friendly reminder from *${vendorName}*.
+
+Your pending amount is: *₹${customer.pending_amount.toLocaleString()}*
+
+Please clear your dues at your earliest convenience.
+
+Payment Options:
+- Cash
+- UPI / Online Transfer
+
+Thank you for your cooperation! 🙏
+
+_${vendorName}_
+    `.trim()
+
+    window.open(`https://wa.me/91${phone}?text=${encodeURIComponent(message)}`, '_blank')
   }
 
   const formatDate = (dateStr: string) => {
@@ -254,13 +285,24 @@ export default function PaymentsPage() {
                       <p className="text-xs text-gray-400">pending</p>
                     </div>
                   </div>
-                  <button
-                    onClick={() => openPaymentModal(customer)}
-                    className="w-full mt-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold text-sm hover:shadow-lg transition flex items-center justify-center gap-1"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Record Payment
-                  </button>
+                  
+                  {/* Action Buttons */}
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => sendWhatsAppReminder(customer)}
+                      className="flex-none w-12 h-10 bg-green-100 text-green-600 rounded-lg flex items-center justify-center hover:bg-green-200 transition"
+                      title="Send WhatsApp Reminder"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => openPaymentModal(customer)}
+                      className="flex-1 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-lg font-semibold text-sm hover:shadow-lg transition flex items-center justify-center gap-1"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Record Payment
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
