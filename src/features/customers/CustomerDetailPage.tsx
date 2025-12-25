@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Phone, MessageCircle, Edit2, Calendar, IndianRupee, UtensilsCrossed, FileText, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
+
 interface CustomerDetail {
   id: string
   full_name: string
@@ -26,6 +27,263 @@ interface CustomerDetail {
   pending_amount: number
   attendance_count: number
 }
+
+  // Renew Subscription Component
+  function RenewSubscriptionButton({ customer, onSuccess }: { 
+    customer: CustomerDetail
+    onSuccess: () => void 
+  }) {
+    const [showModal, setShowModal] = useState(false)
+    const [loading, setLoading] = useState(false)
+    
+    const today = new Date()
+    const endDate = customer.subscription ? new Date(customer.subscription.end_date) : null
+    const daysLeft = endDate ? Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : 0
+    const canRenew = daysLeft <= 7 // Can renew if 7 days or less remaining
+    
+    const [formData, setFormData] = useState({
+      start_date: '',
+      end_date: '',
+      plan_amount: customer.subscription?.plan_amount?.toString() || '',
+      advance_amount: '',
+      payment_mode: 'cash'
+    })
+
+    const openModal = () => {
+      // New subscription starts day after current ends
+      const newStart = new Date(customer.subscription?.end_date || new Date())
+      newStart.setDate(newStart.getDate() + 1)
+      
+      const newEnd = new Date(newStart)
+      newEnd.setMonth(newEnd.getMonth() + 1)
+
+      setFormData({
+        start_date: newStart.toISOString().split('T')[0],
+        end_date: newEnd.toISOString().split('T')[0],
+        plan_amount: customer.subscription?.plan_amount?.toString() || '',
+        advance_amount: '',
+        payment_mode: 'cash'
+      })
+      setShowModal(true)
+    }
+
+    const handleRenew = async () => {
+      if (!formData.plan_amount) {
+        alert('Please enter plan amount')
+        return
+      }
+
+      setLoading(true)
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) throw new Error('Not authenticated')
+
+        const { data: vendor } = await supabase
+          .from('vendors')
+          .select('id')
+          .eq('auth_user_id', user.id)
+          .single()
+
+        if (!vendor) throw new Error('Vendor not found')
+
+        // 1. Mark old subscription as completed
+        if (customer.subscription) {
+          await supabase
+            .from('subscriptions')
+            .update({ status: 'completed' })
+            .eq('id', customer.subscription.id)
+        }
+
+        // 2. Create new subscription
+        const { data: newSub, error: subError } = await supabase
+          .from('subscriptions')
+          .insert({
+            customer_id: customer.id,
+            vendor_id: vendor.id,
+            start_date: formData.start_date,
+            end_date: formData.end_date,
+            meal_frequency: customer.subscription?.meal_frequency || 'one_time',
+            plan_amount: Number(formData.plan_amount),
+            status: 'active'
+          })
+          .select()
+          .single()
+
+        if (subError) throw subError
+
+        // 3. Record advance payment if any
+        if (Number(formData.advance_amount) > 0) {
+          await supabase
+            .from('payments')
+            .insert({
+              customer_id: customer.id,
+              subscription_id: newSub.id,
+              vendor_id: vendor.id,
+              amount: Number(formData.advance_amount),
+              payment_type: 'advance',
+              payment_mode: formData.payment_mode,
+              payment_date: formData.start_date,
+              status: 'completed'
+            })
+        }
+
+        setShowModal(false)
+        onSuccess()
+      } catch (error: any) {
+        alert('Error renewing: ' + error.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    // Calculate totals
+    const previousPending = customer.pending_amount
+    const newPlanAmount = Number(formData.plan_amount) || 0
+    const advancePaid = Number(formData.advance_amount) || 0
+    const totalDue = previousPending + newPlanAmount
+    const newPending = totalDue - advancePaid
+
+    if (!canRenew) return null
+
+    return (
+      <>
+        <button
+          onClick={openModal}
+          className={`w-full py-4 rounded-xl font-semibold flex items-center justify-center gap-2 ${
+            daysLeft <= 0 
+              ? 'bg-red-500 text-white' 
+              : 'bg-orange-100 text-orange-600 border-2 border-orange-200'
+          }`}
+        >
+          <Calendar className="w-5 h-5" />
+          {daysLeft <= 0 ? 'Subscription Expired - Renew Now' : `Renew Subscription (${daysLeft}d left)`}
+        </button>
+
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setShowModal(false)}>
+            <div className="w-full max-w-lg bg-white rounded-t-3xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white px-5 py-4 border-b border-gray-100">
+                <h2 className="text-lg font-bold text-gray-900">Renew Subscription</h2>
+                <p className="text-sm text-gray-500">{customer.full_name}</p>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Previous Pending */}
+                {previousPending > 0 && (
+                  <div className="bg-red-50 rounded-xl p-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-red-600 font-medium">Previous Pending</span>
+                      <span className="text-lg font-bold text-red-600">₹{previousPending.toLocaleString()}</span>
+                    </div>
+                    <p className="text-xs text-red-500 mt-1">This will be carried forward</p>
+                  </div>
+                )}
+
+                {/* Date Range */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                    <input
+                      type="date"
+                      value={formData.start_date}
+                      onChange={e => setFormData({ ...formData, start_date: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                    <input
+                      type="date"
+                      value={formData.end_date}
+                      onChange={e => setFormData({ ...formData, end_date: e.target.value })}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Plan Amount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Plan Amount *</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
+                    <input
+                      type="number"
+                      value={formData.plan_amount}
+                      onChange={e => setFormData({ ...formData, plan_amount: e.target.value })}
+                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Advance Payment */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Advance Payment</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
+                    <input
+                      type="number"
+                      value={formData.advance_amount}
+                      onChange={e => setFormData({ ...formData, advance_amount: e.target.value })}
+                      placeholder="0"
+                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Payment Mode */}
+                <div className="grid grid-cols-4 gap-2">
+                  {['cash', 'upi', 'card', 'bank_transfer'].map(mode => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, payment_mode: mode })}
+                      className={`p-2 rounded-lg border-2 text-center text-xs font-medium capitalize ${
+                        formData.payment_mode === mode
+                          ? 'border-orange-500 bg-orange-50 text-orange-600'
+                          : 'border-gray-200 text-gray-600'
+                      }`}
+                    >
+                      {mode.replace('_', ' ')}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Summary */}
+                <div className="bg-gray-50 rounded-xl p-4 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Previous Pending</span>
+                    <span>₹{previousPending.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">New Plan Amount</span>
+                    <span>₹{newPlanAmount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Advance Paid</span>
+                    <span className="text-green-600">- ₹{advancePaid.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
+                    <span className="font-semibold">New Pending</span>
+                    <span className={`font-bold text-lg ${newPending > 0 ? 'text-red-500' : 'text-green-500'}`}>
+                      ₹{newPending.toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleRenew}
+                  disabled={loading}
+                  className="w-full py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold disabled:opacity-50"
+                >
+                  {loading ? 'Processing...' : 'Confirm Renewal'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
 
 export default function CustomerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -261,6 +519,14 @@ export default function CustomerDetailPage() {
             </div>
           </div>
         </div>
+
+        {/* Renew Subscription */}
+        {customer.subscription && (
+          <RenewSubscriptionButton 
+            customer={customer}
+            onSuccess={fetchCustomerDetail}
+          />
+        )}
 
         {/* Action Buttons */}
         <div className="space-y-3">

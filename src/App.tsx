@@ -11,6 +11,8 @@ import PaymentsPage from './features/payments/PaymentsPage'
 import SettingsPage from './features/settings/SettingsPage'
 import CustomerDetailPage from './features/customers/CustomerDetailPage'
 import ReportPage from './features/reports/ReportPage'
+import MenuManagementPage from './features/settings/MenuManagementPage'
+import QuickSalePage from './features/sales/QuickSalePage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -127,6 +129,15 @@ function App() {
         />
 
         <Route
+          path="/settings/menu"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <MenuManagementPage />
+          }
+        />
+
+        <Route
           path="/customer/:id"
           element={
             authState === 'logged_out' ? <Navigate to="/login" /> :
@@ -141,6 +152,15 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <ReportPage />
+          }
+        />
+
+        <Route
+          path="/quick-sale"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <QuickSalePage />
           }
         />
 

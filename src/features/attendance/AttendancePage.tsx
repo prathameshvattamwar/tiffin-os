@@ -216,16 +216,19 @@ export default function AttendancePage() {
   }
 
   const isDateInSubscription = (day: number) => {
-    if (!selectedCustomer?.subscription) return false
-    const dateStr = getDateStr(day)
-    return dateStr >= selectedCustomer.subscription.start_date && 
-           dateStr <= selectedCustomer.subscription.end_date
-  }
+  if (!selectedCustomer?.subscription) return true // Allow if no subscription
+  const dateStr = getDateStr(day)
+  const start = selectedCustomer.subscription.start_date
+  const end = selectedCustomer.subscription.end_date
+  return dateStr >= start && dateStr <= end
+}
 
-  const isFutureDate = (day: number) => {
-    const dateStr = getDateStr(day)
-    return dateStr > new Date().toISOString().split('T')[0]
-  }
+const isFutureDate = (day: number) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const checkDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
+  return checkDate > today
+}
 
   const openDayModal = (day: number) => {
     if (isFutureDate(day) || !isDateInSubscription(day)) return

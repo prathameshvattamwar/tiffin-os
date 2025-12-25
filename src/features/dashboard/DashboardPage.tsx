@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ChevronRight } from 'lucide-react'
+import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ChevronRight, ShoppingBag} from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+
 
 interface DashboardStats {
   totalCustomers: number
@@ -219,6 +220,14 @@ export default function DashboardPage() {
             >
               <Plus className="w-5 h-5" />
               Add New Customer
+            </button>
+
+            <button 
+              onClick={() => navigate('/quick-sale')}
+              className="w-full bg-white border border-gray-200 text-gray-700 p-4 rounded-xl font-semibold hover:bg-gray-50 hover:border-gray-300 transition-all flex items-center justify-center gap-2"
+            >
+              <ShoppingBag className="w-5 h-5" />
+              Quick Sale (Walk-in)
             </button>
           </div>
         </div>
