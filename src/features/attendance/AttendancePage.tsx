@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ChevronLeft, ChevronRight, Check, X, Users, Plus, Minus, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Check, Users, Plus, Minus, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Customer {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageCircle, Download, Calendar, IndianRupee, UtensilsCrossed, User } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Calendar, IndianRupee, UtensilsCrossed, User } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface ReportData {

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Save, User, Phone, Building, MapPin } from 'lucide-react'
+import { ArrowLeft, Save, User, Phone, Building } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface VendorProfile {
