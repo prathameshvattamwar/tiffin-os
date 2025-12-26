@@ -44,6 +44,12 @@ export default function BusinessReportsPage() {
   const [customEnd, setCustomEnd] = useState('')
 
   useEffect(() => {
+  if (downloadDataLoaded) {
+    // future use / placeholder
+  }
+}, [downloadDataLoaded])
+
+  useEffect(() => {
   fetchVendorData()
   }, [])
 

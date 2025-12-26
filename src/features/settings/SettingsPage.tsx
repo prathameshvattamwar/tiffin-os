@@ -396,19 +396,19 @@ export default function SettingsPage() {
               </button>
               
               <button
-                onClick={() => { setLanguage('hinglish'); setShowLanguageModal(false) }}
+                onClick={() => { setLanguage('hindi'); setShowLanguageModal(false) }}
                 className={`w-full p-4 rounded-xl border-2 text-left transition ${
-                  language === 'hinglish' 
+                  language === 'hindi' 
                     ? 'border-orange-500 bg-orange-50' 
                     : 'border-gray-200 hover:border-gray-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900">Hinglish</p>
-                    <p className="text-sm text-gray-500">Hindi + English Mix</p>
+                    <p className="font-semibold text-gray-900">Hindi</p>
+                    <p className="text-sm text-gray-500">Full Hindi</p>
                   </div>
-                  {language === 'hinglish' && (
+                  {language === 'hindi' && (
                     <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
                       <Check className="w-4 h-4 text-white" />
                     </div>

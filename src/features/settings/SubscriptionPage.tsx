@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, Crown, Zap, Users, MessageCircle, FileText, Headphones } from 'lucide-react'
+import { ArrowLeft, Check, Crown, Zap, Users, MessageCircle, Headphones } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface VendorPlan {

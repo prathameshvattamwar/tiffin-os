@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { IndianRupee, Plus, Search, Calendar, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import RecordPaymentModal from './RecordPaymentModal'
-import { ListSkeleton, Skeleton } from '../../components/ui/Skeleton'
+import { ListSkeleton } from '../../components/ui/Skeleton'
 
 interface CustomerWithPending {
   id: string
