@@ -352,8 +352,20 @@ export default function AttendancePage() {
               </button>
             </div>
 
+            {/* Search Bar for Quick Mode */}
+            <div className="relative mt-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search customer..."
+                value={customerSearch}
+                onChange={(e) => setCustomerSearch(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 bg-gray-100 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-white"
+              />
+            </div>
+
             {/* Stats */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 mt-3">
               <div className="flex-1 bg-orange-50 rounded-xl p-3 text-center">
                 <p className="text-xl font-bold text-orange-600">{lunchCount}</p>
                 <p className="text-xs text-orange-600">Lunch</p>
@@ -446,9 +458,14 @@ export default function AttendancePage() {
         {loading ? (
           <ListSkeleton count={5} />
         ) : mode === 'quick' ? (
-          /* Quick Mark List */
-          <div className="space-y-2">
-            {customers.map(customer => {
+            /* Quick Mark List */
+            <div className="space-y-2">
+              {filteredCustomers.length === 0 ? (
+                <div className="text-center py-8">
+                  <Search className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500">No customers found</p>
+                </div>
+              ) : filteredCustomers.map(customer => {
               const data = quickAttendance.get(customer.id) || { lunch: false, dinner: false, guests: 0 }
               const mealFreq = customer.subscription?.meal_frequency
               

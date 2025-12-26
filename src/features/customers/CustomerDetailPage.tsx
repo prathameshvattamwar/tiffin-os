@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Phone, MessageCircle, Edit2, Calendar, IndianRupee, UtensilsCrossed, FileText, Users } from 'lucide-react'
+import { ArrowLeft, Phone, MessageCircle, Edit2, Calendar, IndianRupee, UtensilsCrossed, FileText, Users, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Skeleton } from '../../components/ui/Skeleton'
 
@@ -36,6 +36,8 @@ export default function CustomerDetailPage() {
   const [customer, setCustomer] = useState<CustomerDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [showEditModal, setShowEditModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (id) fetchCustomerDetail()
@@ -101,6 +103,28 @@ export default function CustomerDetailPage() {
       console.error('Error:', error)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleDeleteCustomer = async () => {
+  setDeleting(true)
+    try {
+      // Soft delete - mark as deleted with timestamp
+      const { error } = await supabase
+        .from('customers')
+        .update({ 
+          is_active: false,
+          deleted_at: new Date().toISOString()
+        })
+        .eq('id', id)
+
+      if (error) throw error
+      
+      navigate('/customers')
+    } catch (error: any) {
+      alert('Error deleting customer: ' + error.message)
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -180,12 +204,20 @@ export default function CustomerDetailPage() {
             <h1 className="text-lg font-bold text-gray-900">{customer.full_name}</h1>
             <p className="text-sm text-gray-500">{customer.mobile_number}</p>
           </div>
+          <div className="flex gap-2">
           <button
             onClick={() => setShowEditModal(true)}
             className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"
           >
             <Edit2 className="w-5 h-5 text-orange-600" />
           </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center"
+          >
+            <Trash2 className="w-5 h-5 text-red-600" />
+          </button>
+        </div>
         </div>
       </div>
 
@@ -343,6 +375,40 @@ export default function CustomerDetailPage() {
         </div>
 
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-8 h-8 text-red-600" />
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 text-center mb-2">Delete Customer?</h3>
+              <p className="text-gray-500 text-center text-sm mb-6">
+                Are you sure you want to delete <span className="font-semibold text-gray-700">{customer.full_name}</span>? 
+                You can restore from Recycle Bin later.
+              </p>
+              
+              <div className="space-y-2">
+                <button
+                  onClick={handleDeleteCustomer}
+                  disabled={deleting}
+                  className="w-full py-3 bg-red-500 text-white rounded-xl font-semibold disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting...' : 'Yes, Delete'}
+                </button>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="w-full py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit Modal */}
       {showEditModal && (

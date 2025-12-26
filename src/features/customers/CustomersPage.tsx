@@ -62,6 +62,7 @@ export default function CustomersPage() {
         .select('*')
         .eq('vendor_id', vendor.id)
         .order('created_at', { ascending: false })
+        .eq('is_active', true)
 
       // Fetch all subscriptions
       const { data: subscriptionsData } = await supabase
