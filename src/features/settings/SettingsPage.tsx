@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard } from 'lucide-react'
+import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface VendorProfile {
@@ -131,6 +131,20 @@ export default function SettingsPage() {
             <div className="flex-1 text-left">
               <p className="font-medium text-gray-900">Menu Management</p>
               <p className="text-xs text-gray-500">Add, edit menu items & prices</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+
+          <button 
+            onClick={() => navigate('/reports')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+          >
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+              <FileSpreadsheet className="w-5 h-5 text-purple-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Business Reports</p>
+              <p className="text-xs text-gray-500">Download Excel reports</p>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
