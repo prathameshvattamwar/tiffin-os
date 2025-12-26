@@ -20,6 +20,10 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
     customer_type: 'monthly',
     meal_frequency: 'two_times',
     meal_type: 'veg',
+    // Meal Preferences (NEW)
+    preferred_meal: 'lunch', // for one_time: 'lunch' or 'dinner'
+    lunch_meal_type: 'chapati_bhaji', // 'chapati_bhaji', 'rice_plate', 'both'
+    dinner_meal_type: 'chapati_bhaji',
     // Step 3: Subscription
     start_date: new Date().toISOString().split('T')[0],
     end_date: '',
@@ -95,7 +99,7 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
 
       if (!vendor) throw new Error('Vendor not found')
 
-      // 1. Create Customer
+      // 1. Create Customer with meal preferences
       const { data: customer, error: customerError } = await supabase
         .from('customers')
         .insert({
@@ -107,7 +111,11 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
           meal_type: formData.meal_type,
           address: formData.address,
           notes: formData.notes,
-          is_active: true
+          is_active: true,
+          // Meal Preferences
+          preferred_meal: formData.preferred_meal,
+          lunch_meal_type: formData.lunch_meal_type,
+          dinner_meal_type: formData.dinner_meal_type
         })
         .select()
         .single()
@@ -300,8 +308,8 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                     <label className="block text-sm font-medium text-gray-700 mb-2">Meal Frequency</label>
                     <div className="grid grid-cols-2 gap-3">
                       {[
-                        { value: 'one_time', label: 'One Time', emoji: '🍽️' },
-                        { value: 'two_times', label: 'Two Times', emoji: '🍽️🍽️' }
+                        { value: 'one_time', label: 'One Time', emoji: '🍽️', desc: 'Lunch या Dinner' },
+                        { value: 'two_times', label: 'Two Times', emoji: '🍽️🍽️', desc: 'Lunch + Dinner' }
                       ].map(freq => (
                         <button
                           key={freq.value}
@@ -315,13 +323,127 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                         >
                           <div className="text-2xl mb-1">{freq.emoji}</div>
                           <div className="font-semibold text-gray-800">{freq.label}</div>
+                          <div className="text-xs text-gray-500">{freq.desc}</div>
                         </button>
                       ))}
                     </div>
                   </div>
 
+                  {/* ONE TIME - Select which meal */}
+                  {formData.meal_frequency === 'one_time' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Which Meal? 🕐</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { value: 'lunch', label: 'Lunch', emoji: '🌅', desc: 'दुपारचे जेवण' },
+                            { value: 'dinner', label: 'Dinner', emoji: '🌙', desc: 'रात्रीचे जेवण' }
+                          ].map(meal => (
+                            <button
+                              key={meal.value}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, preferred_meal: meal.value })}
+                              className={`p-4 rounded-xl border-2 text-center transition-all ${
+                                formData.preferred_meal === meal.value
+                                  ? 'border-orange-500 bg-orange-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-2xl mb-1">{meal.emoji}</div>
+                              <div className="font-semibold text-gray-800">{meal.label}</div>
+                              <div className="text-xs text-gray-500">{meal.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {formData.preferred_meal === 'lunch' ? '🌅 Lunch' : '🌙 Dinner'} मध्ये काय?
+                        </label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
+                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                          ].map(type => (
+                            <button
+                              key={type.value}
+                              type="button"
+                              onClick={() => setFormData({ 
+                                ...formData, 
+                                lunch_meal_type: formData.preferred_meal === 'lunch' ? type.value : formData.lunch_meal_type,
+                                dinner_meal_type: formData.preferred_meal === 'dinner' ? type.value : formData.dinner_meal_type
+                              })}
+                              className={`p-4 rounded-xl border-2 text-center transition-all ${
+                                (formData.preferred_meal === 'lunch' ? formData.lunch_meal_type : formData.dinner_meal_type) === type.value
+                                  ? 'border-orange-500 bg-orange-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-2xl mb-1">{type.emoji}</div>
+                              <div className="font-semibold text-gray-800">{type.label}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* TWO TIMES - Select meal type for each */}
+                  {formData.meal_frequency === 'two_times' && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">🌅 Lunch मध्ये काय?</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
+                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                          ].map(type => (
+                            <button
+                              key={type.value}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, lunch_meal_type: type.value })}
+                              className={`p-4 rounded-xl border-2 text-center transition-all ${
+                                formData.lunch_meal_type === type.value
+                                  ? 'border-orange-500 bg-orange-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-2xl mb-1">{type.emoji}</div>
+                              <div className="font-semibold text-gray-800">{type.label}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">🌙 Dinner मध्ये काय?</label>
+                        <div className="grid grid-cols-2 gap-3">
+                          {[
+                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
+                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                          ].map(type => (
+                            <button
+                              key={type.value}
+                              type="button"
+                              onClick={() => setFormData({ ...formData, dinner_meal_type: type.value })}
+                              className={`p-4 rounded-xl border-2 text-center transition-all ${
+                                formData.dinner_meal_type === type.value
+                                  ? 'border-purple-500 bg-purple-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-2xl mb-1">{type.emoji}</div>
+                              <div className="font-semibold text-gray-800">{type.label}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
+
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Meal Type</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Meal Type (Veg/Non-Veg)</label>
                     <div className="grid grid-cols-3 gap-3">
                       {[
                         { value: 'veg', label: 'Veg', emoji: '🥬' },
@@ -396,6 +518,27 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                     placeholder="3000"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
                   />
+                </div>
+              </div>
+
+              {/* Meal Summary */}
+              <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+                <h4 className="font-semibold text-blue-800 mb-2">📋 Meal Summary</h4>
+                <div className="text-sm text-blue-700 space-y-1">
+                  {formData.meal_frequency === 'two_times' ? (
+                    <>
+                      <p>🌅 Lunch: {formData.lunch_meal_type === 'chapati_bhaji' ? 'Chapati Bhaji' : 'Rice Plate'}</p>
+                      <p>🌙 Dinner: {formData.dinner_meal_type === 'chapati_bhaji' ? 'Chapati Bhaji' : 'Rice Plate'}</p>
+                    </>
+                  ) : (
+                    <p>
+                      {formData.preferred_meal === 'lunch' ? '🌅 Lunch' : '🌙 Dinner'}: {' '}
+                      {(formData.preferred_meal === 'lunch' ? formData.lunch_meal_type : formData.dinner_meal_type) === 'chapati_bhaji' 
+                        ? 'Chapati Bhaji' 
+                        : 'Rice Plate'}
+                    </p>
+                  )}
+                  <p className="text-blue-600 capitalize">Type: {formData.meal_type.replace('_', '-')}</p>
                 </div>
               </div>
             </div>
