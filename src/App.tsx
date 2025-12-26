@@ -14,6 +14,7 @@ import ReportPage from './features/reports/ReportPage'
 import MenuManagementPage from './features/settings/MenuManagementPage'
 import QuickSalePage from './features/sales/QuickSalePage'
 import EditProfilePage from './features/settings/EditProfilePage'
+import SubscriptionPage from './features/settings/SubscriptionPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -171,6 +172,15 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <EditProfilePage />
+          }
+        />
+
+        <Route
+          path="/settings/subscription"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <SubscriptionPage />
           }
         />
 

@@ -232,7 +232,9 @@ export default function DashboardPage() {
           </div>
           <div className="flex items-center gap-2">
             {/* Plan Badge */}
-            <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+            <div 
+              onClick={() => navigate('/settings/subscription')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold cursor-pointer hover:opacity-80 transition ${
               vendorPlan?.subscription_plan === 'free_trial' 
                 ? 'bg-orange-100 text-orange-600' 
                 : 'bg-green-100 text-green-600'
