@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ShoppingBag, AlertCircle, Crown, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Skeleton, CardSkeleton } from '../../components/ui/Skeleton'
+import { useLanguage } from '../../lib/language'
 
 interface DashboardStats {
   totalCustomers: number
@@ -28,6 +29,7 @@ const PLAN_LIMITS: Record<string, number> = {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
   const [loading, setLoading] = useState(true)
   const [vendorName, setVendorName] = useState('')
   const [vendorPlan, setVendorPlan] = useState<VendorPlan | null>(null)
@@ -335,7 +337,7 @@ export default function DashboardPage() {
                 <span className="text-sm font-normal text-gray-400">/{getCustomerLimit()}</span>
               )}
             </p>
-            <p className="text-sm text-gray-500">Total Customers</p>
+            <p className="text-sm text-gray-500">{t('dashboard.totalCustomers')}</p>
           </div>
 
           <div 
@@ -348,7 +350,7 @@ export default function DashboardPage() {
             <p className={`text-2xl font-bold ${stats.totalPending > 0 ? 'text-red-500' : 'text-gray-900'}`}>
               {formatAmount(stats.totalPending)}
             </p>
-            <p className="text-sm text-gray-500">Total Pending</p>
+            <p className="text-sm text-gray-500">{t('dashboard.totalPending')}</p>
           </div>
 
           <div 
@@ -359,7 +361,7 @@ export default function DashboardPage() {
               <UtensilsCrossed className="w-5 h-5 text-orange-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900">{stats.todayMeals}</p>
-            <p className="text-sm text-gray-500">Today's Meals</p>
+            <p className="text-sm text-gray-500">{t('dashboard.todayMeals')}</p>
           </div>
 
           <div 
@@ -370,7 +372,7 @@ export default function DashboardPage() {
               <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
             <p className="text-2xl font-bold text-green-600">{formatAmount(stats.thisMonthCollection)}</p>
-            <p className="text-sm text-gray-500">This Month</p>
+            <p className="text-sm text-gray-500">{t('dashboard.thisMonth')}</p>
           </div>
         </div>
 

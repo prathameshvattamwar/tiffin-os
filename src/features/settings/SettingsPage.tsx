@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useLanguage } from '../../lib/language'
+import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2, Globe, Check } from 'lucide-react'
 
 interface VendorProfile {
   id: string
@@ -22,6 +23,8 @@ export default function SettingsPage() {
     expiry_alerts: true,
     daily_summary: false
   })
+  const { language, setLanguage, t } = useLanguage()
+  const [showLanguageModal, setShowLanguageModal] = useState(false)
 
   useEffect(() => {
     fetchVendor()
@@ -121,21 +124,6 @@ export default function SettingsPage() {
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
 
-          {/* Recycle Bin */}
-          <button 
-            onClick={() => navigate('/settings/recycle-bin')}
-            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
-          >
-            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-              <Trash2 className="w-5 h-5 text-red-600" />
-            </div>
-            <div className="flex-1 text-left">
-              <p className="font-medium text-gray-900">Recycle Bin</p>
-              <p className="text-xs text-gray-500">Restore deleted customers</p>
-            </div>
-            <ChevronRight className="w-5 h-5 text-gray-300" />
-          </button>
-
           {/* Menu Management */}
           <button 
             onClick={() => navigate('/settings/menu')}
@@ -179,6 +167,37 @@ export default function SettingsPage() {
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
         </div>
+
+        {/* Recycle Bin */}
+          <button 
+            onClick={() => navigate('/settings/recycle-bin')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+          >
+            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+              <Trash2 className="w-5 h-5 text-red-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Recycle Bin</p>
+              <p className="text-xs text-gray-500">Restore deleted customers</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+        </button>
+
+        <button 
+          onClick={() => setShowLanguageModal(true)}
+          className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
+        >
+          <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+            <Globe className="w-5 h-5 text-indigo-600" />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="font-medium text-gray-900">{t('settings.language')}</p>
+            <p className="text-xs text-gray-500">{t('settings.languageDesc')}</p>
+          </div>
+          <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full capitalize">
+            {language}
+          </span>
+        </button>
 
         {/* Notifications */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -331,6 +350,62 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* Language Modal */}
+      {showLanguageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-5" onClick={() => setShowLanguageModal(false)}>
+          <div className="w-full max-w-sm bg-white rounded-2xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-100">
+              <h3 className="text-lg font-bold text-gray-900">Select Language</h3>
+              <p className="text-sm text-gray-500">भाषा चुनें</p>
+            </div>
+            <div className="p-4 space-y-2">
+              <button
+                onClick={() => { setLanguage('english'); setShowLanguageModal(false) }}
+                className={`w-full p-4 rounded-xl border-2 text-left transition ${
+                  language === 'english' 
+                    ? 'border-orange-500 bg-orange-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900">English</p>
+                    <p className="text-sm text-gray-500">Full English</p>
+                  </div>
+                  {language === 'english' && (
+                    <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </div>
+              </button>
+              
+              <button
+                onClick={() => { setLanguage('hinglish'); setShowLanguageModal(false) }}
+                className={`w-full p-4 rounded-xl border-2 text-left transition ${
+                  language === 'hinglish' 
+                    ? 'border-orange-500 bg-orange-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900">Hinglish</p>
+                    <p className="text-sm text-gray-500">Hindi + English Mix</p>
+                  </div>
+                  {language === 'hinglish' && (
+                    <div className="w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center">
+                      <Check className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+                </div>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
