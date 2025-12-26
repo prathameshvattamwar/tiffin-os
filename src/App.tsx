@@ -17,6 +17,8 @@ import EditProfilePage from './features/settings/EditProfilePage'
 import SubscriptionPage from './features/settings/SubscriptionPage'
 import BusinessReportsPage from './features/reports/BusinessReportsPage'
 import RecycleBinPage from './features/settings/RecycleBinPage'
+import HowToUsePage from './features/settings/HowToUsePage'
+import PrivacyPolicyPage from './features/settings/PrivacyPolicyPage'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -201,6 +203,24 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <RecycleBinPage />
+          }
+        />
+
+        <Route
+          path="/settings/how-to-use"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <HowToUsePage />
+          }
+        />
+
+        <Route
+          path="/settings/privacy"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <PrivacyPolicyPage />
           }
         />
 

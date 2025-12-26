@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UtensilsCrossed, Building2, User, Phone, MessageCircle, MapPin, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import TermsConditionsModal from '../../components/TermsConditionsModal'
 
 const steps = [
   { id: 1, title: 'Business Info' },
@@ -13,6 +14,8 @@ export default function OnboardingPage() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   const [formData, setFormData] = useState({
     business_name: '',
     owner_name: '',
@@ -43,6 +46,11 @@ export default function OnboardingPage() {
   }
 
   const handleSubmit = async () => {
+    if (!acceptedTerms) {
+      alert('Please accept Terms & Conditions')
+      return
+    }
+    
     setLoading(true)
 
     try {
@@ -264,15 +272,17 @@ export default function OnboardingPage() {
 
           {/* Step 3: Finish */}
           {currentStep === 3 && (
-            <div className="text-center py-6">
-              <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-10 h-10 text-green-500" />
+            <div className="py-6">
+              <div className="text-center">
+                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <CheckCircle2 className="w-10 h-10 text-green-500" />
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">You're all set!</h2>
+                <p className="text-gray-500 mb-8">Review your details and start using TiffinOS</p>
               </div>
-              <h2 className="text-2xl font-bold text-gray-800 mb-2">You're all set!</h2>
-              <p className="text-gray-500 mb-8">Review your details and start using TiffinOS</p>
               
               {/* Summary */}
-              <div className="bg-gray-50 rounded-2xl p-6 text-left space-y-4">
+              <div className="bg-gray-50 rounded-2xl p-6 text-left space-y-4 mb-6">
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200">
                   <span className="text-gray-500">Business Name</span>
                   <span className="font-semibold text-gray-800">{formData.business_name}</span>
@@ -289,6 +299,35 @@ export default function OnboardingPage() {
                   <span className="text-gray-500">Type</span>
                   <span className="font-semibold text-gray-800 capitalize">{formData.business_type}</span>
                 </div>
+              </div>
+
+              {/* Terms & Conditions Checkbox */}
+              <div className="flex items-start gap-3 p-4 bg-orange-50 rounded-xl border border-orange-100">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={acceptedTerms}
+                  onChange={(e) => setAcceptedTerms(e.target.checked)}
+                  className="w-5 h-5 mt-0.5 rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <label htmlFor="terms" className="text-sm text-gray-700">
+                  I agree to the{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    className="text-orange-600 font-semibold underline"
+                  >
+                    Terms & Conditions
+                  </button>
+                  {' '}and{' '}
+                  <button
+                    type="button"
+                    onClick={() => setShowTermsModal(true)}
+                    className="text-orange-600 font-semibold underline"
+                  >
+                    Privacy Policy
+                  </button>
+                </label>
               </div>
             </div>
           )}
@@ -318,8 +357,8 @@ export default function OnboardingPage() {
               <button
                 type="button"
                 onClick={handleSubmit}
-                disabled={loading}
-                className="flex-1 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-green-200 transition-all disabled:opacity-50"
+                disabled={loading || !acceptedTerms}
+                className="flex-1 py-4 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:shadow-lg hover:shadow-green-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {loading ? 'Setting up...' : '🚀 Start Using TiffinOS'}
               </button>
@@ -333,6 +372,16 @@ export default function OnboardingPage() {
           Your data is secure and will never be shared
         </p>
       </div>
+
+      {/* Terms & Conditions Modal */}
+      <TermsConditionsModal 
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setAcceptedTerms(true)
+          setShowTermsModal(false)
+        }}
+      />
     </div>
   )
 }

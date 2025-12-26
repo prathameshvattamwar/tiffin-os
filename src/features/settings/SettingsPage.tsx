@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLanguage } from '../../lib/language'
-import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2, Globe, Check } from 'lucide-react'
+import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2, Globe, Check, BookOpen } from 'lucide-react'
 
 interface VendorProfile {
   id: string
@@ -166,38 +166,38 @@ export default function SettingsPage() {
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>
-        </div>
 
-        {/* Recycle Bin */}
+          {/* Recycle Bin */}
+            <button 
+              onClick={() => navigate('/settings/recycle-bin')}
+              className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+            >
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="flex-1 text-left">
+                <p className="font-medium text-gray-900">Recycle Bin</p>
+                <p className="text-xs text-gray-500">Restore deleted customers</p>
+              </div>
+              <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+
           <button 
-            onClick={() => navigate('/settings/recycle-bin')}
-            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+            onClick={() => setShowLanguageModal(true)}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
           >
-            <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
-              <Trash2 className="w-5 h-5 text-red-600" />
+            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
+              <Globe className="w-5 h-5 text-indigo-600" />
             </div>
             <div className="flex-1 text-left">
-              <p className="font-medium text-gray-900">Recycle Bin</p>
-              <p className="text-xs text-gray-500">Restore deleted customers</p>
+              <p className="font-medium text-gray-900">{t('settings.language')}</p>
+              <p className="text-xs text-gray-500">{t('settings.languageDesc')}</p>
             </div>
-            <ChevronRight className="w-5 h-5 text-gray-300" />
-        </button>
-
-        <button 
-          onClick={() => setShowLanguageModal(true)}
-          className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
-        >
-          <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center">
-            <Globe className="w-5 h-5 text-indigo-600" />
-          </div>
-          <div className="flex-1 text-left">
-            <p className="font-medium text-gray-900">{t('settings.language')}</p>
-            <p className="text-xs text-gray-500">{t('settings.languageDesc')}</p>
-          </div>
-          <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full capitalize">
-            {language}
-          </span>
-        </button>
+            <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full capitalize">
+              {language}
+            </span>
+          </button>
+        </div>
 
         {/* Notifications */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -276,9 +276,23 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Other Options */}
+        {/* Other Options Help & Support*/}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <p className="px-4 py-3 text-xs font-semibold text-gray-400 uppercase bg-gray-50">Support</p>
+
+          <button 
+          onClick={() => navigate('/settings/how-to-use')}
+          className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+        >
+          <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+            <BookOpen className="w-5 h-5 text-orange-600" />
+          </div>
+          <div className="flex-1 text-left">
+            <p className="font-medium text-gray-900">How to Use</p>
+            <p className="text-xs text-gray-500">Learn to use TiffinOS / कसे वापरायचे</p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-gray-300" />
+        </button>
           
           <button 
             onClick={() => window.open('https://wa.me/919271981229?text=Hi, I need help with TiffinOS', '_blank')}
@@ -295,7 +309,7 @@ export default function SettingsPage() {
           </button>
 
           <button 
-            onClick={() => alert('Privacy Policy: Your data is secure and never shared with third parties.')}
+            onClick={() => navigate('/settings/privacy')}
             className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition"
           >
             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
