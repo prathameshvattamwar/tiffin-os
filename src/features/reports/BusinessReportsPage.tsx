@@ -32,6 +32,7 @@ export default function BusinessReportsPage() {
   const [vendorPlan, setVendorPlan] = useState<VendorPlan | null>(null)
   const [businessName, setBusinessName] = useState('')
   const [downloadsThisMonth, setDownloadsThisMonth] = useState(0)
+  const [downloadDataLoaded, setDownloadDataLoaded] = useState(false)
   
   // Report filters
   const [reportType, setReportType] = useState<'monthly' | 'weekly' | 'custom'>('monthly')
@@ -43,9 +44,14 @@ export default function BusinessReportsPage() {
   const [customEnd, setCustomEnd] = useState('')
 
   useEffect(() => {
-    fetchVendorData()
-    loadDownloadCount()
+  fetchVendorData()
   }, [])
+
+  useEffect(() => {
+    if (vendorId) {
+      loadDownloadCount()
+    }
+  }, [vendorId])
 
   const fetchVendorData = async () => {
     try {
@@ -73,26 +79,59 @@ export default function BusinessReportsPage() {
     }
   }
 
-  const loadDownloadCount = () => {
-    const currentMonth = new Date().toISOString().slice(0, 7)
-    const saved = localStorage.getItem('tiffinos_report_downloads')
-    if (saved) {
-      const data = JSON.parse(saved)
-      if (data.month === currentMonth) {
-        setDownloadsThisMonth(data.count)
-      } else {
-        // Reset for new month
-        localStorage.setItem('tiffinos_report_downloads', JSON.stringify({ month: currentMonth, count: 0 }))
-        setDownloadsThisMonth(0)
+  const loadDownloadCount = async () => {
+    if (!vendorId) return
+    
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7)
+      
+      const { data } = await supabase
+        .from('vendors')
+        .select('report_downloads_count, report_downloads_month')
+        .eq('id', vendorId)
+        .single()
+
+      if (data) {
+        if (data.report_downloads_month === currentMonth) {
+          setDownloadsThisMonth(data.report_downloads_count || 0)
+        } else {
+          // New month - reset count in database
+          await supabase
+            .from('vendors')
+            .update({ 
+              report_downloads_count: 0, 
+              report_downloads_month: currentMonth 
+            })
+            .eq('id', vendorId)
+          setDownloadsThisMonth(0)
+        }
       }
+    } catch (error) {
+      console.error('Error loading download count:', error)
+    } finally {
+      setDownloadDataLoaded(true)
     }
   }
 
-  const incrementDownloadCount = () => {
+  const incrementDownloadCount = async () => {
+    if (!vendorId) return
+    
     const currentMonth = new Date().toISOString().slice(0, 7)
     const newCount = downloadsThisMonth + 1
-    localStorage.setItem('tiffinos_report_downloads', JSON.stringify({ month: currentMonth, count: newCount }))
-    setDownloadsThisMonth(newCount)
+    
+    try {
+      await supabase
+        .from('vendors')
+        .update({ 
+          report_downloads_count: newCount, 
+          report_downloads_month: currentMonth 
+        })
+        .eq('id', vendorId)
+      
+      setDownloadsThisMonth(newCount)
+    } catch (error) {
+      console.error('Error updating download count:', error)
+    }
   }
 
   const getDownloadLimit = () => {
@@ -300,7 +339,7 @@ export default function BusinessReportsPage() {
       XLSX.writeFile(wb, fileName)
 
       // Increment download count
-      incrementDownloadCount()
+      await incrementDownloadCount()
 
       alert('✅ Report downloaded successfully!')
 

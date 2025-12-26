@@ -7,7 +7,6 @@ export default function PrivacyPolicyPage() {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       
-      {/* Header */}
       <div className="bg-white border-b border-gray-100 px-5 py-4 sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button
@@ -25,7 +24,6 @@ export default function PrivacyPolicyPage() {
 
       <div className="px-5 py-4 space-y-4">
 
-        {/* Header Card */}
         <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-2xl p-5 text-white">
           <div className="flex items-center gap-3 mb-3">
             <Shield className="w-8 h-8" />
@@ -36,7 +34,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* Section 1 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
@@ -59,7 +56,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* Section 2 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center gap-3">
             <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
@@ -82,7 +78,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* Section 3 */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center gap-3">
             <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
@@ -104,7 +99,6 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* Contact */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="p-4 border-b border-gray-100 flex items-center gap-3">
             <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
@@ -121,12 +115,11 @@ export default function PrivacyPolicyPage() {
           </div>
         </div>
 
-        {/* WhatsApp Button */}
         <button
           onClick={() => window.open('https://wa.me/919271981229?text=Hi! I have a question about privacy.', '_blank')}
           className="w-full py-4 bg-green-500 text-white rounded-xl font-semibold"
         >
-          💬 Contact on WhatsApp
+          �� Contact on WhatsApp
         </button>
 
       </div>

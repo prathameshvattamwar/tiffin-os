@@ -20,6 +20,7 @@ import RecycleBinPage from './features/settings/RecycleBinPage'
 import HowToUsePage from './features/settings/HowToUsePage'
 import PrivacyPolicyPage from './features/settings/PrivacyPolicyPage'
 
+
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-gray-50">
@@ -55,7 +56,8 @@ function App() {
         .from('vendors')
         .select('id, is_onboarded')
         .eq('auth_user_id', session.user.id)
-        .single()
+        // .single()
+        .maybeSingle()
 
       if (!vendor || !vendor.is_onboarded) {
         setAuthState('needs_onboarding')

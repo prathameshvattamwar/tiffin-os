@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { UtensilsCrossed, Building2, User, Phone, MessageCircle, MapPin, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import TermsConditionsModal from '../../components/TermsConditionsModal'
+import PrivacyPolicyModal from '../../components/PrivacyPolicyModal'
 
 const steps = [
   { id: 1, title: 'Business Info' },
@@ -16,6 +17,7 @@ export default function OnboardingPage() {
   const [loading, setLoading] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false)
   const [formData, setFormData] = useState({
     business_name: '',
     owner_name: '',
@@ -322,7 +324,7 @@ export default function OnboardingPage() {
                   {' '}and{' '}
                   <button
                     type="button"
-                    onClick={() => setShowTermsModal(true)}
+                    onClick={() => setShowPrivacyModal(true)}
                     className="text-orange-600 font-semibold underline"
                   >
                     Privacy Policy
@@ -382,6 +384,20 @@ export default function OnboardingPage() {
           setShowTermsModal(false)
         }}
       />
+      <TermsConditionsModal 
+        isOpen={showTermsModal}
+        onClose={() => setShowTermsModal(false)}
+        onAccept={() => {
+          setAcceptedTerms(true)
+          setShowTermsModal(false)
+        }}
+      />
+
+      <PrivacyPolicyModal 
+        isOpen={showPrivacyModal}
+        onClose={() => setShowPrivacyModal(false)}
+      />
     </div>
+    
   )
 }

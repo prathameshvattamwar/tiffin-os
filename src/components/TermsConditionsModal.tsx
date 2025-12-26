@@ -115,7 +115,7 @@ export default function TermsConditionsModal({ isOpen, onClose, onAccept }: Term
 
           <div className="bg-orange-50 rounded-xl p-3 border border-orange-100">
             <p className="text-orange-800 text-xs font-medium">
-              Last Updated: December 2024
+              Last Updated: December 2025
             </p>
           </div>
 
