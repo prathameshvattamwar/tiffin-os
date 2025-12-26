@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, MessageCircle, Calendar, IndianRupee, UtensilsCrossed, User } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Calendar, IndianRupee, UtensilsCrossed, User, Sun, Moon, Users } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface ReportData {
@@ -9,6 +9,8 @@ interface ReportData {
     mobile_number: string
     whatsapp_number: string
     meal_type: string
+    lunch_meal_type: string
+    dinner_meal_type: string
   }
   vendor: {
     business_name: string
@@ -21,9 +23,12 @@ interface ReportData {
     plan_amount: number
   } | null
   attendance: {
-    present: number
-    absent: number
-    guests: number
+    daysPresent: number
+    lunchCount: number
+    dinnerCount: number
+    totalMeals: number
+    guestCount: number
+    guestCharges: number
   }
   payments: {
     total_paid: number
@@ -61,7 +66,7 @@ export default function ReportPage() {
       // Fetch customer
       const { data: customer } = await supabase
         .from('customers')
-        .select('full_name, mobile_number, whatsapp_number, meal_type')
+        .select('full_name, mobile_number, whatsapp_number, meal_type, lunch_meal_type, dinner_meal_type')
         .eq('id', id)
         .single()
 
@@ -76,12 +81,18 @@ export default function ReportPage() {
       // Fetch attendance stats
       const { data: attendanceData } = await supabase
         .from('attendance')
-        .select('meal_taken, guest_count')
+        .select('attendance_date, lunch_taken, dinner_taken, guest_count')
         .eq('customer_id', id)
 
-      const present = attendanceData?.filter(a => a.meal_taken === 'present').length || 0
-      const absent = attendanceData?.filter(a => a.meal_taken === 'absent').length || 0
-      const guests = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
+      // Calculate attendance metrics
+      const daysPresent = new Set(
+        attendanceData?.filter(a => a.lunch_taken || a.dinner_taken).map(a => a.attendance_date)
+      ).size
+      const lunchCount = attendanceData?.filter(a => a.lunch_taken).length || 0
+      const dinnerCount = attendanceData?.filter(a => a.dinner_taken).length || 0
+      const totalMeals = lunchCount + dinnerCount
+      const guestCount = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
+      const guestCharges = guestCount * 40
 
       // Fetch payments
       const { data: paymentsData } = await supabase
@@ -92,13 +103,20 @@ export default function ReportPage() {
 
       const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
       const planAmount = subscription?.plan_amount || 0
-      const pending = Math.max(0, planAmount - totalPaid)
+      const pending = Math.max(0, planAmount + guestCharges - totalPaid)
 
       setReport({
         customer: customer!,
         vendor: vendor!,
         subscription,
-        attendance: { present, absent, guests },
+        attendance: { 
+          daysPresent, 
+          lunchCount, 
+          dinnerCount, 
+          totalMeals, 
+          guestCount,
+          guestCharges
+        },
         payments: {
           total_paid: totalPaid,
           pending,
@@ -121,6 +139,10 @@ export default function ReportPage() {
     })
   }
 
+  const getMealTypeLabel = (type: string) => {
+    return type === 'chapati_bhaji' ? 'Chapati Bhaji' : type === 'rice_plate' ? 'Rice Plate' : 'Both'
+  }
+
   const generateWhatsAppMessage = () => {
     if (!report) return ''
 
@@ -133,20 +155,26 @@ export default function ReportPage() {
 📱 *Mobile:* ${report.customer.mobile_number}
 ${report.subscription ? `📅 *Period:* ${formatDate(report.subscription.start_date)} - ${formatDate(report.subscription.end_date)}` : ''}
 
-*ATTENDANCE SUMMARY*
+*🍽️ MEAL SUMMARY*
 ────────────────────
-✅ Present: ${report.attendance.present} days
-❌ Absent: ${report.attendance.absent} days
-👥 Guests: ${report.attendance.guests}
+📆 Days Present: *${report.attendance.daysPresent} days*
+🌅 Lunch: *${report.attendance.lunchCount} meals*
+🌙 Dinner: *${report.attendance.dinnerCount} meals*
+🍱 Total Meals: *${report.attendance.totalMeals} meals*
+👥 Guest Meals: *${report.attendance.guestCount} meals*
 
-*PAYMENT DETAILS*
+*💰 PAYMENT DETAILS*
 ────────────────────
-💰 Plan Amount: ₹${report.subscription?.plan_amount?.toLocaleString() || 0}
+📋 Plan Amount: ₹${report.subscription?.plan_amount?.toLocaleString() || 0}
+${report.attendance.guestCharges > 0 ? `👥 Guest Charges: ₹${report.attendance.guestCharges.toLocaleString()}` : ''}
+${report.attendance.guestCharges > 0 ? `📊 Total Due: ₹${((report.subscription?.plan_amount || 0) + report.attendance.guestCharges).toLocaleString()}` : ''}
 ✅ Total Paid: ₹${report.payments.total_paid.toLocaleString()}
-${report.payments.pending > 0 ? `⚠️ *PENDING: ₹${report.payments.pending.toLocaleString()}*` : '✅ *FULLY PAID*'}
+
+${report.payments.pending > 0 ? `⚠️ *PENDING: ₹${report.payments.pending.toLocaleString()}*` : '✅ *FULLY PAID* 🎉'}
 
 ━━━━━━━━━━━━━━━━━━━━━
 Thank you for choosing us! 🙏
+📞 Contact: ${report.vendor.mobile_number}
     `.trim()
 
     return encodeURIComponent(msg)
@@ -198,7 +226,12 @@ Thank you for choosing us! 🙏
         {/* Business Header */}
         <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-2xl p-5 text-white text-center">
           <h2 className="text-xl font-bold">{report.vendor.business_name}</h2>
-          <p className="text-orange-100 text-sm mt-1">Customer Statement</p>
+          <p className="text-orange-100 text-sm mt-1">Monthly Statement</p>
+          {report.subscription && (
+            <p className="text-white/80 text-xs mt-2">
+              {formatDate(report.subscription.start_date)} - {formatDate(report.subscription.end_date)}
+            </p>
+          )}
         </div>
 
         {/* Customer Info */}
@@ -207,46 +240,117 @@ Thank you for choosing us! 🙏
             <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
               <User className="w-6 h-6 text-orange-600" />
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-bold text-gray-900">{report.customer.full_name}</h3>
               <p className="text-sm text-gray-500">{report.customer.mobile_number}</p>
             </div>
+            <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
+              report.customer.meal_type === 'veg' 
+                ? 'bg-green-100 text-green-700' 
+                : report.customer.meal_type === 'non_veg'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-purple-100 text-purple-700'
+            }`}>
+              {report.customer.meal_type === 'veg' ? '🥬 Veg' : report.customer.meal_type === 'non_veg' ? '🍗 Non-Veg' : '🍱 Both'}
+            </span>
           </div>
-          {report.subscription && (
-            <div className="flex items-center gap-2 text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-              <Calendar className="w-4 h-4" />
-              <span>{formatDate(report.subscription.start_date)} - {formatDate(report.subscription.end_date)}</span>
+          
+          {/* Meal Preferences */}
+          {report.subscription?.meal_frequency && (
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase">Meal Preferences</p>
+              <div className="flex gap-3">
+                {(report.subscription.meal_frequency === 'two_times' || report.subscription.meal_frequency === 'one_time') && report.customer.lunch_meal_type && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Sun className="w-4 h-4 text-orange-500" />
+                    <span className="text-gray-600">Lunch: {getMealTypeLabel(report.customer.lunch_meal_type)}</span>
+                  </div>
+                )}
+                {report.subscription.meal_frequency === 'two_times' && report.customer.dinner_meal_type && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Moon className="w-4 h-4 text-purple-500" />
+                    <span className="text-gray-600">Dinner: {getMealTypeLabel(report.customer.dinner_meal_type)}</span>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Attendance Summary */}
+        {/* Meal Summary - Enhanced */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <div className="px-4 py-3 bg-gradient-to-r from-orange-50 to-amber-50 border-b border-gray-100">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <UtensilsCrossed className="w-4 h-4 text-orange-500" />
-              Attendance Summary
+              Meal Summary
             </h3>
           </div>
-          <div className="p-4 grid grid-cols-3 gap-3">
-            <div className="text-center p-3 bg-green-50 rounded-xl">
-              <p className="text-2xl font-bold text-green-600">{report.attendance.present}</p>
-              <p className="text-xs text-green-600">Present</p>
+          <div className="p-4">
+            {/* Days Present */}
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <Calendar className="w-5 h-5 text-blue-600" />
+                </div>
+                <span className="text-gray-600">Days Present</span>
+              </div>
+              <span className="text-xl font-bold text-blue-600">{report.attendance.daysPresent}</span>
             </div>
-            <div className="text-center p-3 bg-red-50 rounded-xl">
-              <p className="text-2xl font-bold text-red-500">{report.attendance.absent}</p>
-              <p className="text-xs text-red-500">Absent</p>
+
+            {/* Lunch Count */}
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                  <Sun className="w-5 h-5 text-orange-600" />
+                </div>
+                <span className="text-gray-600">Lunch Taken</span>
+              </div>
+              <span className="text-xl font-bold text-orange-600">{report.attendance.lunchCount}</span>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-xl">
-              <p className="text-2xl font-bold text-blue-600">{report.attendance.guests}</p>
-              <p className="text-xs text-blue-600">Guests</p>
+
+            {/* Dinner Count */}
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                  <Moon className="w-5 h-5 text-purple-600" />
+                </div>
+                <span className="text-gray-600">Dinner Taken</span>
+              </div>
+              <span className="text-xl font-bold text-purple-600">{report.attendance.dinnerCount}</span>
+            </div>
+
+            {/* Total Meals */}
+            <div className="flex items-center justify-between py-3 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                  <UtensilsCrossed className="w-5 h-5 text-green-600" />
+                </div>
+                <span className="text-gray-600 font-medium">Total Meals</span>
+              </div>
+              <span className="text-xl font-bold text-green-600">{report.attendance.totalMeals}</span>
+            </div>
+
+            {/* Guest Meals */}
+            <div className="flex items-center justify-between py-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                  <Users className="w-5 h-5 text-amber-600" />
+                </div>
+                <div>
+                  <span className="text-gray-600">Guest Meals</span>
+                  {report.attendance.guestCharges > 0 && (
+                    <p className="text-xs text-gray-400">₹40 × {report.attendance.guestCount} = ₹{report.attendance.guestCharges}</p>
+                  )}
+                </div>
+              </div>
+              <span className="text-xl font-bold text-amber-600">{report.attendance.guestCount}</span>
             </div>
           </div>
         </div>
 
         {/* Payment Summary */}
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
+          <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-emerald-50 border-b border-gray-100">
             <h3 className="font-semibold text-gray-800 flex items-center gap-2">
               <IndianRupee className="w-4 h-4 text-green-500" />
               Payment Details
@@ -259,13 +363,25 @@ Thank you for choosing us! 🙏
                 <span className="font-medium">₹{report.subscription.plan_amount.toLocaleString()}</span>
               </div>
             )}
+            {report.attendance.guestCharges > 0 && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Guest Charges</span>
+                <span className="font-medium text-amber-600">+ ₹{report.attendance.guestCharges.toLocaleString()}</span>
+              </div>
+            )}
+            {report.attendance.guestCharges > 0 && (
+              <div className="flex justify-between pt-2 border-t border-dashed border-gray-200">
+                <span className="text-gray-600 font-medium">Total Due</span>
+                <span className="font-bold">₹{((report.subscription?.plan_amount || 0) + report.attendance.guestCharges).toLocaleString()}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span className="text-gray-500">Total Paid</span>
-              <span className="font-medium text-green-600">₹{report.payments.total_paid.toLocaleString()}</span>
+              <span className="font-medium text-green-600">- ₹{report.payments.total_paid.toLocaleString()}</span>
             </div>
-            <div className="flex justify-between pt-3 border-t border-gray-100">
-              <span className="font-semibold text-gray-800">Pending</span>
-              <span className={`font-bold text-lg ${report.payments.pending > 0 ? 'text-red-500' : 'text-green-500'}`}>
+            <div className="flex justify-between pt-3 border-t-2 border-gray-200">
+              <span className="font-bold text-gray-800">Balance</span>
+              <span className={`font-bold text-xl ${report.payments.pending > 0 ? 'text-red-500' : 'text-green-500'}`}>
                 {report.payments.pending > 0 ? `₹${report.payments.pending.toLocaleString()}` : '✓ Paid'}
               </span>
             </div>
@@ -283,9 +399,11 @@ Thank you for choosing us! 🙏
                 <div key={index} className="p-4 flex justify-between items-center">
                   <div>
                     <p className="font-medium text-gray-800">₹{Number(payment.amount).toLocaleString()}</p>
-                    <p className="text-xs text-gray-500">{formatDate(payment.payment_date)} • {payment.payment_mode}</p>
+                    <p className="text-xs text-gray-500">
+                      {formatDate(payment.payment_date)} • {payment.payment_mode?.toUpperCase()}
+                    </p>
                   </div>
-                  <span className="text-green-500 text-sm">✓</span>
+                  <span className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600">✓</span>
                 </div>
               ))}
             </div>
@@ -296,10 +414,10 @@ Thank you for choosing us! 🙏
         <div className="space-y-3 pt-4">
           <button
             onClick={handleWhatsAppShare}
-            className="w-full bg-green-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition"
+            className="w-full bg-green-500 text-white py-4 rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-green-600 transition shadow-lg shadow-green-200"
           >
             <MessageCircle className="w-5 h-5" />
-            Share on WhatsApp
+            Share Report on WhatsApp
           </button>
         </div>
 
