@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Users, Check, MessageCircle } from 'lucide-react'
+// import { ArrowLeft, Send, Users, Check, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Send, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Customer {
