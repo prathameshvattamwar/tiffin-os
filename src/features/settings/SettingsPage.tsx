@@ -336,7 +336,8 @@ export default function SettingsPage() {
 
         {/* App Version */}
         <p className="text-center text-xs text-gray-400 pt-4">
-          TiffinOS v1.0.0 • Made with ❤️ in Pune
+          TiffinOS v1.0.0 • 🇮🇳 Service across India<br />
+          <span className="text-orange-500">Currently launched in Pune</span>
         </p>
 
       </div>

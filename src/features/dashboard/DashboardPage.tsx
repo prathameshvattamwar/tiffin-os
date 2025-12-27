@@ -20,7 +20,7 @@ interface VendorPlan {
 }
 
 const PLAN_LIMITS: Record<string, number> = {
-  'free_trial': 20,
+  'free_trial': 30,
   'starter_monthly': 50,
   'starter_quarterly': 50,
   'pro_monthly': 999999,

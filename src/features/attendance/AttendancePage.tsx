@@ -119,7 +119,7 @@ export default function AttendancePage() {
   const fetchQuickAttendance = async () => {
     if (!vendorId) return
     
-    const dateStr = selectedDate.toISOString().split('T')[0]
+    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     const { data } = await supabase
       .from('attendance')
       .select('customer_id, lunch_taken, dinner_taken, guest_count')
@@ -178,7 +178,7 @@ export default function AttendancePage() {
     newMap.set(customerId, updated)
     setQuickAttendance(newMap)
 
-    const dateStr = selectedDate.toISOString().split('T')[0]
+    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     await supabase.from('attendance').upsert({
       customer_id: customerId,
       vendor_id: vendorId,
@@ -201,7 +201,7 @@ export default function AttendancePage() {
     newMap.set(customerId, updated)
     setQuickAttendance(newMap)
 
-    const dateStr = selectedDate.toISOString().split('T')[0]
+    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     await supabase.from('attendance').upsert({
       customer_id: customerId,
       vendor_id: vendorId,
@@ -229,7 +229,10 @@ export default function AttendancePage() {
   const getDateStr = (day: number) => {
     const year = currentMonth.getFullYear()
     const month = currentMonth.getMonth()
-    return new Date(year, month, day).toISOString().split('T')[0]
+    const yyyy = year
+    const mm = String(month + 1).padStart(2, '0')
+    const dd = String(day).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   }
 
   const isDateInSubscription = (day: number) => {

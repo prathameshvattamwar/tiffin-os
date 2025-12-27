@@ -73,7 +73,7 @@ export default function OnboardingPage() {
 
       if (error) throw error
 
-      navigate('/')
+      window.location.href = '/'
     } catch (error: any) {
       console.error('Onboarding error:', error.message)
       alert('Failed to save. Please try again.')

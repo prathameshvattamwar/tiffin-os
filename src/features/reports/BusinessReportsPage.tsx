@@ -17,7 +17,7 @@ interface ReportData {
 }
 
 const DOWNLOAD_LIMITS: Record<string, number> = {
-  'free_trial': 3,
+  'free_trial': 999999,
   'starter_monthly': 5,
   'starter_quarterly': 5,
   'pro_monthly': 999999,
@@ -308,20 +308,49 @@ export default function BusinessReportsPage() {
       ]
       XLSX.utils.book_append_sheet(wb, customerSheet, 'Customers')
 
-      // === SHEET 3: Daily Attendance ===
-      const attendanceRows = data.attendance.map(a => {
-        const customer = data.customers.find(c => c.id === a.customer_id)
-        return {
-          'Date': new Date(a.attendance_date).toLocaleDateString('en-IN'),
-          'Customer': customer?.full_name || 'Unknown',
-          'Lunch': a.lunch_taken ? '✓' : '✗',
-          'Dinner': a.dinner_taken ? '✓' : '✗',
-          'Guests': a.guest_count || 0,
-          'Notes': a.notes || ''
-        }
-      }).sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime())
-      const attendanceSheet = XLSX.utils.json_to_sheet(attendanceRows)
-      attendanceSheet['!cols'] = [{ wch: 12 }, { wch: 20 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 25 }]
+      // === SHEET 3: Daily Attendance (Matrix Format) ===
+      // Get unique dates in range
+      const uniqueDates = [...new Set(data.attendance.map(a => a.attendance_date))].sort()
+
+      // Create header row: Customer Name | Date1 | Date2 | Date3 ...
+      const attendanceHeader = ['Customer Name', ...uniqueDates.map(d => {
+        const date = new Date(d)
+        return `${date.getDate()}/${date.getMonth() + 1}`
+      }), 'Total Days', 'Total Meals']
+
+      // Create data rows for each customer
+      const attendanceMatrix = data.customers.map(customer => {
+        const row: (string | number)[] = [customer.full_name]
+        let totalDays = 0
+        let totalMeals = 0
+        
+        uniqueDates.forEach(date => {
+          const record = data.attendance.find(a => a.customer_id === customer.id && a.attendance_date === date)
+          if (record) {
+            const lunch = record.lunch_taken ? 'L' : ''
+            const dinner = record.dinner_taken ? 'D' : ''
+            const mark = [lunch, dinner].filter(Boolean).join('+') || '✗'
+            row.push(mark)
+            if (record.lunch_taken || record.dinner_taken) totalDays++
+            if (record.lunch_taken) totalMeals++
+            if (record.dinner_taken) totalMeals++
+          } else {
+            row.push('-')
+          }
+        })
+        
+        row.push(totalDays)
+        row.push(totalMeals)
+        return row
+      })
+
+      const attendanceSheetData = [attendanceHeader, ...attendanceMatrix]
+      const attendanceSheet = XLSX.utils.aoa_to_sheet(attendanceSheetData)
+
+      // Set column widths
+      const colWidths = [{ wch: 20 }, ...uniqueDates.map(() => ({ wch: 6 })), { wch: 10 }, { wch: 10 }]
+      attendanceSheet['!cols'] = colWidths
+
       XLSX.utils.book_append_sheet(wb, attendanceSheet, 'Attendance')
 
       // === SHEET 4: Payments ===

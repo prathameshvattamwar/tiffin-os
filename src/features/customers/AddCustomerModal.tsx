@@ -25,7 +25,7 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
     lunch_meal_type: 'chapati_bhaji', // 'chapati_bhaji', 'rice_plate', 'both'
     dinner_meal_type: 'chapati_bhaji',
     // Step 3: Subscription
-    start_date: new Date().toISOString().split('T')[0],
+    start_date: '',
     end_date: '',
     plan_amount: '',
     // Step 4: Payment
@@ -38,7 +38,10 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
   const calculateEndDate = (startDate: string) => {
     const date = new Date(startDate)
     date.setMonth(date.getMonth() + 1)
-    return date.toISOString().split('T')[0]
+    const yyyy = date.getFullYear()
+    const mm = String(date.getMonth() + 1).padStart(2, '0')
+    const dd = String(date.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
   }
 
   // Set end date when start date changes
