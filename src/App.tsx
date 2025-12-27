@@ -5,21 +5,21 @@ import LoginPage from './features/auth/LoginPage'
 import OnboardingPage from './features/auth/OnboardingPage'
 import DashboardPage from './features/dashboard/DashboardPage'
 import CustomersPage from './features/customers/CustomersPage'
+import CustomerDetailPage from './features/customers/CustomerDetailPage'
 import AttendancePage from './features/attendance/AttendancePage'
-import BottomNav from './components/ui/BottomNav'
 import PaymentsPage from './features/payments/PaymentsPage'
 import SettingsPage from './features/settings/SettingsPage'
-import CustomerDetailPage from './features/customers/CustomerDetailPage'
 import ReportPage from './features/reports/ReportPage'
-import MenuManagementPage from './features/settings/MenuManagementPage'
-import QuickSalePage from './features/sales/QuickSalePage'
-import EditProfilePage from './features/settings/EditProfilePage'
-import SubscriptionPage from './features/settings/SubscriptionPage'
 import BusinessReportsPage from './features/reports/BusinessReportsPage'
+import SubscriptionPage from './features/settings/SubscriptionPage'
 import RecycleBinPage from './features/settings/RecycleBinPage'
 import HowToUsePage from './features/settings/HowToUsePage'
 import PrivacyPolicyPage from './features/settings/PrivacyPolicyPage'
-
+import MenuManagementPage from './features/settings/MenuManagementPage'
+import EditProfilePage from './features/settings/EditProfilePage'
+import QuickSalePage from './features/sales/QuickSalePage'
+import BroadcastPage from './features/settings/BroadcastPage'
+import BottomNav from './components/ui/BottomNav'
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -56,7 +56,6 @@ function App() {
         .from('vendors')
         .select('id, is_onboarded')
         .eq('auth_user_id', session.user.id)
-        // .single()
         .maybeSingle()
 
       if (!vendor || !vendor.is_onboarded) {
@@ -120,11 +119,11 @@ function App() {
 
         <Route
           path="/payments"
-                element={
-                  authState === 'logged_out' ? <Navigate to="/login" /> :
-                  authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-                  <AppLayout><PaymentsPage /></AppLayout>
-                }
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <AppLayout><PaymentsPage /></AppLayout>
+          }
         />
 
         <Route
@@ -146,33 +145,6 @@ function App() {
         />
 
         <Route
-          path="/customer/:id"
-          element={
-            authState === 'logged_out' ? <Navigate to="/login" /> :
-            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-            <CustomerDetailPage />
-          }
-        />
-
-        <Route
-          path="/report/:id"
-          element={
-            authState === 'logged_out' ? <Navigate to="/login" /> :
-            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-            <ReportPage />
-          }
-        />
-
-        <Route
-          path="/quick-sale"
-          element={
-            authState === 'logged_out' ? <Navigate to="/login" /> :
-            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-            <QuickSalePage />
-          }
-        />
-
-        <Route
           path="/settings/profile"
           element={
             authState === 'logged_out' ? <Navigate to="/login" /> :
@@ -187,15 +159,6 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <SubscriptionPage />
-          }
-        />
-
-        <Route
-          path="/reports"
-          element={
-            authState === 'logged_out' ? <Navigate to="/login" /> :
-            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
-            <BusinessReportsPage />
           }
         />
 
@@ -223,6 +186,51 @@ function App() {
             authState === 'logged_out' ? <Navigate to="/login" /> :
             authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
             <PrivacyPolicyPage />
+          }
+        />
+
+        <Route
+          path="/settings/broadcast"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <BroadcastPage />
+          }
+        />
+
+        <Route
+          path="/customer/:id"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <CustomerDetailPage />
+          }
+        />
+
+        <Route
+          path="/report/:id"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <ReportPage />
+          }
+        />
+
+        <Route
+          path="/reports"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <BusinessReportsPage />
+          }
+        />
+
+        <Route
+          path="/quick-sale"
+          element={
+            authState === 'logged_out' ? <Navigate to="/login" /> :
+            authState === 'needs_onboarding' ? <Navigate to="/onboarding" /> :
+            <QuickSalePage />
           }
         />
 

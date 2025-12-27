@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { useLanguage } from '../../lib/language'
-import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2, Globe, Check, BookOpen } from 'lucide-react'
+import { User, Bell, Shield, HelpCircle, LogOut, ChevronRight, UtensilsCrossed, CreditCard, FileSpreadsheet, Trash2, Globe, Check, BookOpen, Send } from 'lucide-react'
 
 interface VendorProfile {
   id: string
@@ -149,6 +149,20 @@ export default function SettingsPage() {
             <div className="flex-1 text-left">
               <p className="font-medium text-gray-900">Business Reports</p>
               <p className="text-xs text-gray-500">Download Excel reports</p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-gray-300" />
+          </button>
+
+          <button 
+            onClick={() => navigate('/settings/broadcast')}
+            className="w-full flex items-center gap-4 p-4 hover:bg-gray-50 transition border-b border-gray-100"
+          >
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <Send className="w-5 h-5 text-green-600" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="font-medium text-gray-900">Broadcast Message</p>
+              <p className="text-xs text-gray-500">Send to all customers</p>
             </div>
             <ChevronRight className="w-5 h-5 text-gray-300" />
           </button>

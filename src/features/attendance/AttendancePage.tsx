@@ -57,16 +57,16 @@ export default function AttendancePage() {
   }, [])
 
   useEffect(() => {
-    if (mode === 'quick') {
+    if (mode === 'quick' && vendorId) {
       fetchQuickAttendance()
     }
-  }, [selectedDate, mode])
+  }, [selectedDate, mode, vendorId])
 
   useEffect(() => {
-    if (selectedCustomer && mode === 'calendar') {
+    if (selectedCustomer && mode === 'calendar' && vendorId) {
       fetchCustomerAttendance()
     }
-  }, [selectedCustomer, currentMonth, mode])
+  }, [selectedCustomer, currentMonth, mode, vendorId])
 
   // Close dropdown on outside click
   useEffect(() => {

@@ -28,6 +28,7 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
     start_date: '',
     end_date: '',
     plan_amount: '',
+    billing_type: 'monthly',
     // Step 4: Payment
     advance_amount: '',
     payment_mode: 'cash',
@@ -521,6 +522,34 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                     placeholder="3000"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
                   />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Billing Type</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, billing_type: 'monthly' })}
+                    className={`p-4 rounded-xl border-2 text-center ${
+                      formData.billing_type === 'monthly' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="text-xl mb-1">📅</div>
+                    <div className="font-semibold">Monthly</div>
+                    <div className="text-xs text-gray-500">Fixed ₹{formData.plan_amount}/month</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, billing_type: 'per_meal' })}
+                    className={`p-4 rounded-xl border-2 text-center ${
+                      formData.billing_type === 'per_meal' ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
+                    }`}
+                  >
+                    <div className="text-xl mb-1">🍽️</div>
+                    <div className="font-semibold">Per Meal</div>
+                    <div className="text-xs text-gray-500">₹ × meals taken</div>
+                  </button>
                 </div>
               </div>
 
