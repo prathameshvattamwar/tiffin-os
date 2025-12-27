@@ -30,6 +30,7 @@ export default function AttendancePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
   const [vendorId, setVendorId] = useState<string | null>(null)
+  const [menuPrices, setMenuPrices] = useState<{chapati: number, rice: number}>({ chapati: 50, rice: 70 })
   
   // Customer search states
   const [customerSearch, setCustomerSearch] = useState('')
@@ -117,25 +118,101 @@ export default function AttendancePage() {
   }
 
   const fetchQuickAttendance = async () => {
-    if (!vendorId) return
-    
-    const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
-    const { data } = await supabase
+  setLoading(true)
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { data: vendor } = await supabase
+      .from('vendors')
+      .select('id')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    if (!vendor) return
+    setVendorId(vendor.id)
+
+    // Get selected date string (timezone safe)
+    const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+
+    // Fetch ALL active customers with their subscriptions
+    const { data: customersData } = await supabase
+      .from('customers')
+      .select(`
+        *,
+        subscriptions(id, start_date, end_date, meal_frequency, status)
+      `)
+      .eq('vendor_id', vendor.id)
+      .eq('is_active', true)
+      .order('full_name')
+
+    // Filter customers whose subscription includes selected date
+    const filteredCustomers = (customersData || [])
+      .map((c: any) => {
+        // Find active subscription that includes selected date
+        const activeSub = c.subscriptions?.find((s: any) => 
+          s.status === 'active' && 
+          s.start_date <= selectedDateStr && 
+          s.end_date >= selectedDateStr
+        )
+        return {
+          ...c,
+          subscription: activeSub || null
+        }
+      })
+      .filter((c: any) => c.subscription !== null) // Only show customers with valid subscription for this date
+
+    setCustomers(filteredCustomers)
+
+    // Fetch selected date's attendance
+    const { data: attendanceData } = await supabase
       .from('attendance')
       .select('customer_id, lunch_taken, dinner_taken, guest_count')
-      .eq('vendor_id', vendorId)
-      .eq('attendance_date', dateStr)
+      .eq('vendor_id', vendor.id)
+      .eq('attendance_date', selectedDateStr)
 
-    const map = new Map<string, { lunch: boolean; dinner: boolean; guests: number }>()
-    data?.forEach(r => {
-      map.set(r.customer_id, {
-        lunch: r.lunch_taken || false,
-        dinner: r.dinner_taken || false,
-        guests: r.guest_count || 0
+    // Populate quickAttendance Map
+    const newMap = new Map<string, { lunch: boolean; dinner: boolean; guests: number }>()
+    attendanceData?.forEach(record => {
+      newMap.set(record.customer_id, {
+        lunch: record.lunch_taken || false,
+        dinner: record.dinner_taken || false,
+        guests: record.guest_count || 0
       })
     })
-    setQuickAttendance(map)
+    setQuickAttendance(newMap)
+
+  } catch (error) {
+    console.error('Error fetching quick attendance:', error)
+  } finally {
+    setLoading(false)
   }
+}
+
+  const fetchMenuPrices = async () => {
+  if (!vendorId) return
+  
+  const { data } = await supabase
+    .from('menu_items')
+    .select('name, price')
+    .eq('vendor_id', vendorId)
+  
+  if (data) {
+      const chapatiItem = data.find(item => item.name.toLowerCase().includes('chapati'))
+      const riceItem = data.find(item => item.name.toLowerCase().includes('rice'))
+      
+      setMenuPrices({
+        chapati: chapatiItem?.price || 50,
+        rice: riceItem?.price || 70
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (vendorId) {
+      fetchMenuPrices()
+    }
+  }, [vendorId])
 
   const fetchCustomerAttendance = async () => {
     if (!vendorId || !selectedCustomer) return
@@ -471,6 +548,12 @@ export default function AttendancePage() {
               ) : filteredCustomers.map(customer => {
               const data = quickAttendance.get(customer.id) || { lunch: false, dinner: false, guests: 0 }
               const mealFreq = customer.subscription?.meal_frequency
+              const endDate = customer.subscription?.end_date
+              
+              // Calculate days remaining
+              const daysRemaining = endDate ? Math.ceil((new Date(endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0
+              const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0
+              const isExpired = daysRemaining <= 0
               
               return (
                 <div key={customer.id} className="bg-white p-4 rounded-xl border border-gray-100">
@@ -480,7 +563,14 @@ export default function AttendancePage() {
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{customer.full_name}</h3>
-                      <p className="text-xs text-gray-500 capitalize">{mealFreq?.replace('_', ' ') || 'No Plan'}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-gray-500 capitalize">{mealFreq?.replace('_', ' ') || 'No Plan'}</p>
+                        {endDate && (
+                          <span className="text-xs text-gray-400">
+                            till {new Date(endDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   

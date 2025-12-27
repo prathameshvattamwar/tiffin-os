@@ -83,7 +83,7 @@ export default function LoginPage() {
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
             <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <UtensilsCrossed className="w-8 h-8 text-white" />
+              <img src="/logo.png" alt="TiffinOS" className="w-16 h-16" style={{ borderRadius: "15px" }} />
             </div>
             <h1 className="text-2xl font-bold text-white">{APP_NAME}</h1>
           </div>

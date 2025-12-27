@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Users, MessageCircle, Bell, UtensilsCrossed } from 'lucide-react'
+import { ArrowLeft, Send, Users, Check, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Customer {
@@ -15,23 +15,23 @@ const TEMPLATES = [
     id: 'menu',
     title: "Today's Menu",
     icon: '🍽️',
-    template: `🍽️ *Today's Menu*\n\n🌅 Lunch:\n• [Item 1]\n• [Item 2]\n\n🌙 Dinner:\n• [Item 1]\n• [Item 2]\n\n- {business_name}`
+    template: `🍽️ *आजचा मेनू*\n\n🌅 Lunch: [Item]\n🌙 Dinner: [Item]\n\n- {business_name}`
   },
   {
     id: 'holiday',
     title: 'Holiday Notice',
     icon: '🏖️',
-    template: `📢 *Notice*\n\nDear Customer,\n\nOur mess/tiffin service will be closed on [DATE] due to [REASON].\n\nRegular service will resume from [DATE].\n\nSorry for inconvenience.\n\n- {business_name}`
+    template: `📢 *सूचना*\n\n[DATE] रोजी आमची सेवा बंद राहील.\n\n- {business_name}`
   },
   {
     id: 'reminder',
     title: 'Payment Reminder',
     icon: '💰',
-    template: `🙏 *Gentle Reminder*\n\nDear Customer,\n\nKindly clear your pending payment at your earliest convenience.\n\nThank you!\n\n- {business_name}`
+    template: `🙏 *Payment Reminder*\n\nकृपया बाकी रक्कम भरा.\n\n- {business_name}`
   },
   {
     id: 'custom',
-    title: 'Custom Message',
+    title: 'Custom',
     icon: '✏️',
     template: ''
   }
@@ -46,7 +46,8 @@ export default function BroadcastPage() {
   const [message, setMessage] = useState('')
   const [businessName, setBusinessName] = useState('')
   const [sending, setSending] = useState(false)
-  const [sent, setSent] = useState(0)
+  const [currentIndex, setCurrentIndex] = useState(0)
+  const [sentCount, setSentCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -74,7 +75,6 @@ export default function BroadcastPage() {
         .order('full_name')
 
       setCustomers(customersData || [])
-      // Select all by default
       setSelectedCustomers(new Set(customersData?.map(c => c.id) || []))
     } catch (error) {
       console.error('Error:', error)
@@ -101,15 +101,11 @@ export default function BroadcastPage() {
     setSelectedCustomers(newSet)
   }
 
-  const selectAll = () => {
-    setSelectedCustomers(new Set(customers.map(c => c.id)))
-  }
+  const selectAll = () => setSelectedCustomers(new Set(customers.map(c => c.id)))
+  const deselectAll = () => setSelectedCustomers(new Set())
 
-  const deselectAll = () => {
-    setSelectedCustomers(new Set())
-  }
-
-  const sendBroadcast = async () => {
+  // 🚀 ONE CLICK SEND - Opens WhatsApp for each customer sequentially
+  const startBroadcast = async () => {
     if (!message.trim()) {
       alert('Please enter a message')
       return
@@ -119,28 +115,45 @@ export default function BroadcastPage() {
       return
     }
 
+    const confirmed = window.confirm(
+      `📤 Send message to ${selectedCustomers.size} customers?\n\nWhatsApp will open for each customer. Tap "Send" in WhatsApp, then come back here and click "Next Customer".`
+    )
+    if (!confirmed) return
+
     setSending(true)
-    setSent(0)
+    setCurrentIndex(0)
+    setSentCount(0)
 
     const selectedList = customers.filter(c => selectedCustomers.has(c.id))
     
-    for (let i = 0; i < selectedList.length; i++) {
-      const customer = selectedList[i]
-      const phone = customer.whatsapp_number || customer.mobile_number
-      const encodedMsg = encodeURIComponent(message)
-      
-      // Open WhatsApp for each customer with 1 second delay
-      setTimeout(() => {
-        window.open(`https://wa.me/91${phone}?text=${encodedMsg}`, '_blank')
-        setSent(prev => prev + 1)
-      }, i * 1000)
-    }
-
-    setTimeout(() => {
-      setSending(false)
-      alert(`✅ Opened WhatsApp for ${selectedList.length} customers!`)
-    }, selectedList.length * 1000 + 500)
+    // Open first customer
+    openWhatsAppForCustomer(selectedList[0], 0, selectedList.length)
   }
+
+// const [currentCustomerList, setCurrentCustomerList] = useState<any[]>([])
+
+const openWhatsAppForCustomer = (customer: Customer, index: number, total: number) => {
+  const phone = customer.whatsapp_number || customer.mobile_number
+  const personalizedMsg = message.replace('{customer_name}', customer.full_name)
+  const encodedMsg = encodeURIComponent(personalizedMsg)
+  
+  setCurrentIndex(index + 1)
+  setSentCount(index + 1)
+  
+  window.open(`https://wa.me/91${phone}?text=${encodedMsg}`, '_blank')
+  
+  if (index + 1 >= total) {
+    setSending(false)
+    alert(`✅ Completed! Opened WhatsApp for ${total} customers.`)
+  }
+}
+
+const sendNextCustomer = () => {
+  const selectedList = customers.filter(c => selectedCustomers.has(c.id))
+  if (currentIndex < selectedList.length) {
+    openWhatsAppForCustomer(selectedList[currentIndex], currentIndex, selectedList.length)
+  }
+}
 
   if (loading) {
     return (
@@ -156,15 +169,12 @@ export default function BroadcastPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-100 px-5 py-4 sticky top-0 z-10">
         <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/settings')}
-            className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center"
-          >
+          <button onClick={() => navigate('/settings')} className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center">
             <ArrowLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div>
             <h1 className="text-lg font-bold text-gray-900">Broadcast Message</h1>
-            <p className="text-sm text-gray-500">Send message to all customers</p>
+            <p className="text-sm text-gray-500">Send to all customers at once</p>
           </div>
         </div>
       </div>
@@ -174,19 +184,17 @@ export default function BroadcastPage() {
         {/* Template Selection */}
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
           <h3 className="font-semibold text-gray-900 mb-3">Choose Template</h3>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             {TEMPLATES.map(template => (
               <button
                 key={template.id}
                 onClick={() => handleTemplateSelect(template.id)}
                 className={`p-3 rounded-xl border-2 text-center transition ${
-                  selectedTemplate === template.id
-                    ? 'border-orange-500 bg-orange-50'
-                    : 'border-gray-200'
+                  selectedTemplate === template.id ? 'border-orange-500 bg-orange-50' : 'border-gray-200'
                 }`}
               >
                 <div className="text-2xl mb-1">{template.icon}</div>
-                <div className="text-sm font-medium">{template.title}</div>
+                <div className="text-xs font-medium">{template.title}</div>
               </button>
             ))}
           </div>
@@ -198,12 +206,12 @@ export default function BroadcastPage() {
           <textarea
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            placeholder="Type your message here..."
-            rows={6}
+            placeholder="Type your message..."
+            rows={5}
             className="w-full p-3 border border-gray-200 rounded-xl resize-none focus:ring-2 focus:ring-orange-500 outline-none"
           />
           <p className="text-xs text-gray-400 mt-2">
-            {message.length} characters
+            Tip: Use {'{customer_name}'} to add customer's name
           </p>
         </div>
 
@@ -213,28 +221,14 @@ export default function BroadcastPage() {
             <h3 className="font-semibold text-gray-900">
               Select Customers ({selectedCustomers.size}/{customers.length})
             </h3>
-            <div className="flex gap-2">
-              <button
-                onClick={selectAll}
-                className="text-xs text-orange-600 font-medium"
-              >
-                Select All
-              </button>
-              <span className="text-gray-300">|</span>
-              <button
-                onClick={deselectAll}
-                className="text-xs text-gray-500 font-medium"
-              >
-                Deselect
-              </button>
+            <div className="flex gap-3">
+              <button onClick={selectAll} className="text-xs text-orange-600 font-semibold">All</button>
+              <button onClick={deselectAll} className="text-xs text-gray-500 font-semibold">None</button>
             </div>
           </div>
           <div className="max-h-60 overflow-y-auto">
             {customers.map(customer => (
-              <label
-                key={customer.id}
-                className="flex items-center gap-3 p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50"
-              >
+              <label key={customer.id} className="flex items-center gap-3 p-3 border-b border-gray-50 cursor-pointer hover:bg-gray-50">
                 <input
                   type="checkbox"
                   checked={selectedCustomers.has(customer.id)}
@@ -243,36 +237,61 @@ export default function BroadcastPage() {
                 />
                 <div className="flex-1">
                   <p className="font-medium text-gray-900">{customer.full_name}</p>
-                  <p className="text-xs text-gray-500">{customer.mobile_number}</p>
+                  <p className="text-xs text-gray-500">{customer.whatsapp_number || customer.mobile_number}</p>
                 </div>
+                {selectedCustomers.has(customer.id) && <Check className="w-5 h-5 text-orange-500" />}
               </label>
             ))}
           </div>
         </div>
 
-        {/* Send Button */}
+        {/* Progress (when sending) */}
+        {/* {sending && (
+          <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="flex-1">
+                <p className="font-semibold text-orange-800">Sending Messages...</p>
+                <p className="text-sm text-orange-600">{currentIndex} of {selectedCustomers.size} completed</p>
+              </div>
+            </div>
+            <div className="w-full bg-orange-200 rounded-full h-2 mb-3">
+              <div 
+                className="bg-orange-500 h-2 rounded-full transition-all"
+                style={{ width: `${(currentIndex / selectedCustomers.size) * 100}%` }}
+              ></div>
+            </div>
+            {currentIndex < selectedCustomers.size && (
+              <button
+                onClick={sendNextCustomer}
+                className="w-full py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+              >
+                <MessageCircle className="w-5 h-5" />
+                Open Next Customer ({currentIndex + 1}/{selectedCustomers.size})
+              </button>
+            )}
+            {currentIndex >= selectedCustomers.size && (
+              <div className="text-center py-2">
+                <p className="text-green-600 font-semibold">✅ All Done!</p>
+              </div>
+            )}
+          </div>
+        )} */}
+
+        {/* Send Button - Coming Soon */}
         <button
-          onClick={sendBroadcast}
-          disabled={sending || selectedCustomers.size === 0 || !message.trim()}
-          className="w-full py-4 bg-green-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+          disabled={true}
+          className="w-full py-4 bg-gray-300 text-gray-500 rounded-xl font-semibold flex items-center justify-center gap-2 cursor-not-allowed"
         >
-          {sending ? (
-            <>
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-              Sending... ({sent}/{selectedCustomers.size})
-            </>
-          ) : (
-            <>
-              <Send className="w-5 h-5" />
-              Send to {selectedCustomers.size} Customers
-            </>
-          )}
+          <Send className="w-5 h-5" />
+          🚧 Feature Coming Soon
         </button>
 
-        {/* Note */}
-        <p className="text-xs text-gray-500 text-center">
-          WhatsApp will open for each customer. You'll need to tap send manually.
-        </p>
+        {/* Info Note */}
+        <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+          <p className="text-sm text-blue-700">
+            💡 <strong>How it works:</strong> WhatsApp will open for each customer. Just tap "Send" each time. Takes ~2 seconds per customer.
+          </p>
+        </div>
 
       </div>
     </div>

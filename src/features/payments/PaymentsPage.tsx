@@ -9,13 +9,18 @@ interface CustomerWithPending {
   full_name: string
   mobile_number: string
   whatsapp_number?: string
+  lunch_meal_type?: string
+  dinner_meal_type?: string
   subscription?: {
     id: string
     plan_amount: number
+    billing_type: string
+    meal_frequency: string
   }
   total_paid: number
   pending_amount: number
   guest_charges: number
+  meal_charges: number
 }
 
 interface PaymentRecord {
@@ -29,6 +34,11 @@ interface PaymentRecord {
   }
 }
 
+interface MenuPrices {
+  chapati: number
+  rice: number
+}
+
 export default function PaymentsPage() {
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
   const [customers, setCustomers] = useState<CustomerWithPending[]>([])
@@ -39,6 +49,7 @@ export default function PaymentsPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithPending | null>(null)
   const [vendorId, setVendorId] = useState<string | null>(null)
   const [vendorName, setVendorName] = useState('')
+  const [menuPrices, setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
 
   useEffect(() => {
     fetchData()
@@ -60,6 +71,36 @@ export default function PaymentsPage() {
       setVendorId(vendor.id)
       setVendorName(vendor.business_name)
 
+      // Fetch menu prices FIRST
+      const { data: menuData } = await supabase
+        .from('menu_items')
+        .select('name, price')
+        .eq('vendor_id', vendor.id)
+
+      let chapatiPrice = 50
+      let ricePrice = 70
+      // if (menuData) {
+      //   const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
+      //   const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
+      //   chapatiPrice = chapatiItem?.price || 50
+      //   ricePrice = riceItem?.price || 70
+      // }
+      try {
+        const { data: menuData, error: menuError } = await supabase
+          .from('menu_items')
+          .select('name, price')
+          .eq('vendor_id', vendor.id)
+
+        if (!menuError && menuData && menuData.length > 0) {
+          const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
+          const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
+          chapatiPrice = chapatiItem?.price || 50
+          ricePrice = riceItem?.price || 70
+        }
+      } catch (e) {
+        console.log('Menu fetch error, using defaults')
+      }
+
       // Fetch customers with active subscriptions
       const { data: customersData } = await supabase
         .from('customers')
@@ -68,9 +109,13 @@ export default function PaymentsPage() {
           full_name,
           mobile_number,
           whatsapp_number,
+          lunch_meal_type,
+          dinner_meal_type,
           subscriptions!inner (
             id,
             plan_amount,
+            billing_type,
+            meal_frequency,
             status
           )
         `)
@@ -96,35 +141,66 @@ export default function PaymentsPage() {
         .order('payment_date', { ascending: false })
         .limit(50)
 
-      // Fetch attendance for guest charges
+      // Fetch attendance for meal and guest calculation
       const { data: attendanceData } = await supabase
         .from('attendance')
-        .select('customer_id, guest_count')
+        .select('customer_id, lunch_taken, dinner_taken, guest_count')
         .eq('vendor_id', vendor.id)
 
       // Calculate pending for each customer
       const customersWithPending: CustomerWithPending[] = (customersData || []).map((c: any) => {
         const customerPayments = (paymentsData || []).filter((p: any) => p.customer_id === c.id)
         const totalPaid = customerPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
-        const planAmount = c.subscriptions?.[0]?.plan_amount || 0
         
-        // Guest charges (₹40 per guest)
+        const subscription = c.subscriptions?.[0]
+        const planAmount = subscription?.plan_amount || 0
+        const billingType = subscription?.billing_type || 'monthly'
+        const mealFrequency = subscription?.meal_frequency || 'one_time'
+        
+        // Customer attendance
         const customerAttendance = attendanceData?.filter(a => a.customer_id === c.id) || []
+        const lunchCount = customerAttendance.filter(a => a.lunch_taken).length
+        const dinnerCount = customerAttendance.filter(a => a.dinner_taken).length
         const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
-        const guestCharges = totalGuests * 40
+        
+        // Get meal prices based on customer preference
+        const lunchPrice = c.lunch_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
+        const dinnerPrice = c.dinner_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
+        const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
+        
+        // Calculate meal charges based on billing type
+        let mealCharges = 0
+        if (billingType === 'per_meal') {
+          mealCharges = (lunchCount * lunchPrice) + (dinnerCount * dinnerPrice)
+        } else {
+          mealCharges = planAmount
+        }
+        
+        // Guest charges based on menu price (NOT fixed ₹40)
+        const guestCharges = totalGuests * avgMealPrice
+        
+        // Total bill
+        const totalBill = mealCharges + guestCharges
+        
+        // Pending (can be negative = carry forward)
+        const pendingAmount = totalBill - totalPaid
         
         return {
           id: c.id,
           full_name: c.full_name,
           mobile_number: c.mobile_number,
           whatsapp_number: c.whatsapp_number,
-          subscription: c.subscriptions?.[0],
+          lunch_meal_type: c.lunch_meal_type,
+          dinner_meal_type: c.dinner_meal_type,
+          subscription: subscription,
           total_paid: totalPaid,
-          pending_amount: Math.max(0, planAmount + guestCharges - totalPaid),
-          guest_charges: guestCharges
+          pending_amount: pendingAmount,
+          guest_charges: guestCharges,
+          meal_charges: mealCharges
         }
       })
 
+      // Show customers with pending > 0 in pending tab
       setCustomers(customersWithPending.filter(c => c.pending_amount > 0))
       setPayments((paymentsData || []).map((p: any) => ({
         ...p,
@@ -138,9 +214,13 @@ export default function PaymentsPage() {
     }
   }
 
-  const totalPending = customers.reduce((sum, c) => sum + c.pending_amount, 0)
+  const totalPending = customers.reduce((sum, c) => sum + Math.max(0, c.pending_amount), 0)
   const todayCollection = payments
-    .filter(p => p.payment_date === new Date().toISOString().split('T')[0])
+    .filter(p => {
+      const today = new Date()
+      const payDate = new Date(p.payment_date)
+      return payDate.toDateString() === today.toDateString()
+    })
     .reduce((sum, p) => sum + Number(p.amount), 0)
 
   const filteredCustomers = customers.filter(c =>
@@ -155,6 +235,8 @@ export default function PaymentsPage() {
 
   const sendWhatsAppReminder = (customer: CustomerWithPending) => {
     const phone = customer.whatsapp_number || customer.mobile_number
+    const billingType = customer.subscription?.billing_type || 'monthly'
+    
     const message = `
 🔔 *Payment Reminder*
 ━━━━━━━━━━━━━━━━━━
@@ -163,17 +245,17 @@ Hi ${customer.full_name},
 
 This is a friendly reminder from *${vendorName}*.
 
-Your pending amount is: *₹${customer.pending_amount.toLocaleString()}*
-${customer.guest_charges > 0 ? `(Includes ₹${customer.guest_charges} guest charges)` : ''}
+*Bill Details (${billingType === 'monthly' ? 'Monthly' : 'Per Meal'}):*
+${billingType === 'monthly' 
+  ? `📅 Plan Amount: ₹${customer.subscription?.plan_amount?.toLocaleString() || 0}`
+  : `🍽️ Meal Charges: ₹${customer.meal_charges.toLocaleString()}`}
+${customer.guest_charges > 0 ? `👥 Guest Charges: ₹${customer.guest_charges.toLocaleString()}` : ''}
+
+⚠️ *Pending: ₹${customer.pending_amount.toLocaleString()}*
 
 Please clear your dues at your earliest convenience.
 
-Payment Options:
-- Cash
-- UPI / Online Transfer
-
-Thank you for your cooperation! 🙏
-
+Thank you! 🙏
 _${vendorName}_
     `.trim()
 
@@ -292,9 +374,18 @@ _${vendorName}_
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{customer.full_name}</h3>
                       <p className="text-sm text-gray-500">{customer.mobile_number}</p>
-                      {customer.guest_charges > 0 && (
-                        <p className="text-xs text-blue-500">+₹{customer.guest_charges} guest charges</p>
-                      )}
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          customer.subscription?.billing_type === 'per_meal'
+                            ? 'bg-purple-100 text-purple-600'
+                            : 'bg-blue-100 text-blue-600'
+                        }`}>
+                          {customer.subscription?.billing_type === 'per_meal' ? 'Per Meal' : 'Monthly'}
+                        </span>
+                        {customer.guest_charges > 0 && (
+                          <span className="text-xs text-amber-600">+₹{customer.guest_charges} guest</span>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-bold text-red-500">₹{customer.pending_amount.toLocaleString()}</p>

@@ -137,6 +137,7 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
             end_date: formData.end_date,
             meal_frequency: formData.meal_frequency,
             plan_amount: Number(formData.plan_amount),
+            billing_type: formData.billing_type,
             status: 'active'
           })
           .select()

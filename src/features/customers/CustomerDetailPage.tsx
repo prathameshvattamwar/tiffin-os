@@ -86,9 +86,44 @@ export default function CustomerDetailPage() {
         .eq('customer_id', id)
 
       const totalGuests = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
-      const guestCharges = totalGuests * 40 // ₹40 per guest
+      // Fetch menu prices
+const { data: menuData } = await supabase
+  .from('menu_items')
+  .select('name, price')
+  .eq('vendor_id', customerData.vendor_id)
 
-      const pendingAmount = Math.max(0, planAmount + guestCharges - totalPaid)
+let chapatiPrice = 50
+let ricePrice = 70
+// if (menuData) {
+//   const chapatiItem = menuData.find(m => m.name.toLowerCase().includes('chapati'))
+//   const riceItem = menuData.find(m => m.name.toLowerCase().includes('rice'))
+//   chapatiPrice = chapatiItem?.price || 50
+//   ricePrice = riceItem?.price || 70
+// }
+
+try {
+  const { data: menuData, error: menuError } = await supabase
+    .from('menu_items')
+    .select('name, price')
+    .eq('vendor_id', customerData.vendor_id)
+
+  if (!menuError && menuData && menuData.length > 0) {
+    const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
+    const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
+    chapatiPrice = chapatiItem?.price || 50
+    ricePrice = riceItem?.price || 70
+  }
+} catch (e) {
+  console.log('Menu fetch error, using defaults')
+}
+
+    // Guest charges based on menu price
+    const lunchPrice = customerData.lunch_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
+    const dinnerPrice = customerData.dinner_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
+    const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
+    const guestCharges = totalGuests * avgMealPrice
+
+      const pendingAmount = planAmount + guestCharges - totalPaid 
 
       setCustomer({
         ...customerData,
@@ -264,7 +299,7 @@ export default function CustomerDetailPage() {
             </div>
             <div>
               <p className="font-semibold text-blue-800">{customer.total_guests} Guest Meals</p>
-              <p className="text-sm text-blue-600">₹{customer.guest_charges} added to pending (₹40/guest)</p>
+              <p className="text-sm text-blue-600">₹{customer.guest_charges} added to pending</p>
             </div>
           </div>
         )}
@@ -779,10 +814,17 @@ function RenewSubscriptionButton({ customer, onSuccess }: {
 
               {/* Summary */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-500">Previous Pending</span>
-                  <span>₹{previousPending.toLocaleString()}</span>
-                </div>
+                {previousPending > 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-red-500">Previous Pending</span>
+                    <span className="text-red-600">+ ₹{previousPending.toLocaleString()}</span>
+                  </div>
+                ) : previousPending < 0 ? (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-blue-500">Carry Forward (Credit)</span>
+                    <span className="text-blue-600">- ₹{Math.abs(previousPending).toLocaleString()}</span>
+                  </div>
+                ) : null}
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">New Plan Amount</span>
                   <span>₹{newPlanAmount.toLocaleString()}</span>
@@ -792,9 +834,14 @@ function RenewSubscriptionButton({ customer, onSuccess }: {
                   <span className="text-green-600">- ₹{advancePaid.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-200">
-                  <span className="font-semibold">New Pending</span>
-                  <span className={`font-bold text-lg ${newPending > 0 ? 'text-red-500' : 'text-green-500'}`}>
-                    ₹{newPending.toLocaleString()}
+                  <span className="font-semibold">New Balance</span>
+                  <span className={`font-bold text-lg ${
+                    newPending > 0 ? 'text-red-500' : 
+                    newPending < 0 ? 'text-blue-500' : 'text-green-500'
+                  }`}>
+                    {newPending > 0 ? `₹${newPending.toLocaleString()} pending` : 
+                    newPending < 0 ? `₹${Math.abs(newPending).toLocaleString()} credit` : 
+                    '✓ Clear'}
                   </span>
                 </div>
               </div>
