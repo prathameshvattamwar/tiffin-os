@@ -203,7 +203,7 @@ try {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-24 rounded-xl" /> 
             <Skeleton className="h-24 rounded-xl" />
           </div>
           <Skeleton className="h-48 rounded-xl" />
