@@ -12,7 +12,7 @@ const steps = [
 ]
 
 export default function OnboardingPage() {
-  const navigate = useNavigate()
+  const _navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)

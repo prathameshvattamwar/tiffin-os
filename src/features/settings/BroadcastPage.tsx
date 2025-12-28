@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Users, Check, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Send, Check } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface Customer {
@@ -45,9 +45,9 @@ export default function BroadcastPage() {
   const [selectedTemplate, setSelectedTemplate] = useState('')
   const [message, setMessage] = useState('')
   const [businessName, setBusinessName] = useState('')
-  const [sending, setSending] = useState(false)
+  const [_sending, _setSending] = useState(false)
   const [currentIndex, setCurrentIndex] = useState(0)
-  const [sentCount, setSentCount] = useState(0)
+  const [_sentCount, _setSentCount] = useState(0)
 
   useEffect(() => {
     fetchData()
@@ -105,7 +105,7 @@ export default function BroadcastPage() {
   const deselectAll = () => setSelectedCustomers(new Set())
 
   // 🚀 ONE CLICK SEND - Opens WhatsApp for each customer sequentially
-  const startBroadcast = async () => {
+  const _startBroadcast = async () => {
     if (!message.trim()) {
       alert('Please enter a message')
       return
@@ -148,7 +148,7 @@ const openWhatsAppForCustomer = (customer: Customer, index: number, total: numbe
   }
 }
 
-const sendNextCustomer = () => {
+const _sendNextCustomer = () => {
   const selectedList = customers.filter(c => selectedCustomers.has(c.id))
   if (currentIndex < selectedList.length) {
     openWhatsAppForCustomer(selectedList[currentIndex], currentIndex, selectedList.length)

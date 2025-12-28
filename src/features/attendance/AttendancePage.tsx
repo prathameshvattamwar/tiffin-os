@@ -552,8 +552,8 @@ export default function AttendancePage() {
               
               // Calculate days remaining
               const daysRemaining = endDate ? Math.ceil((new Date(endDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0
-              const isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0
-              const isExpired = daysRemaining <= 0
+              const _isExpiringSoon = daysRemaining <= 7 && daysRemaining > 0
+              const _isExpired = daysRemaining <= 0
               
               return (
                 <div key={customer.id} className="bg-white p-4 rounded-xl border border-gray-100">

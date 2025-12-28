@@ -49,7 +49,7 @@ export default function PaymentsPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithPending | null>(null)
   const [vendorId, setVendorId] = useState<string | null>(null)
   const [vendorName, setVendorName] = useState('')
-  const [menuPrices, setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
+  const [_menuPrices, _setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
 
   useEffect(() => {
     fetchData()
@@ -72,7 +72,7 @@ export default function PaymentsPage() {
       setVendorName(vendor.business_name)
 
       // Fetch menu prices FIRST
-      const { data: menuData } = await supabase
+      const { data: _menuData } = await supabase
         .from('menu_items')
         .select('name, price')
         .eq('vendor_id', vendor.id)
@@ -86,7 +86,7 @@ export default function PaymentsPage() {
       //   ricePrice = riceItem?.price || 70
       // }
       try {
-        const { data: menuData, error: menuError } = await supabase
+        const { data: _menuData, error: menuError } = await supabase
           .from('menu_items')
           .select('name, price')
           .eq('vendor_id', vendor.id)
@@ -155,7 +155,7 @@ export default function PaymentsPage() {
         const subscription = c.subscriptions?.[0]
         const planAmount = subscription?.plan_amount || 0
         const billingType = subscription?.billing_type || 'monthly'
-        const mealFrequency = subscription?.meal_frequency || 'one_time'
+        const _mealFrequency = subscription?.meal_frequency || 'one_time'
         
         // Customer attendance
         const customerAttendance = attendanceData?.filter(a => a.customer_id === c.id) || []

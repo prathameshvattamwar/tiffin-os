@@ -87,7 +87,7 @@ export default function CustomerDetailPage() {
 
       const totalGuests = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
       // Fetch menu prices
-const { data: menuData } = await supabase
+const { data: _menuData } = await supabase
   .from('menu_items')
   .select('name, price')
   .eq('vendor_id', customerData.vendor_id)
@@ -102,7 +102,7 @@ let ricePrice = 70
 // }
 
 try {
-  const { data: menuData, error: menuError } = await supabase
+  const { data: _menuData, error: menuError } = await supabase
     .from('menu_items')
     .select('name, price')
     .eq('vendor_id', customerData.vendor_id)
