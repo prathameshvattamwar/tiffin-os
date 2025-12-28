@@ -1,5 +1,5 @@
 import { useState } from 'react'
-// import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { UtensilsCrossed, Building2, User, Phone, MessageCircle, MapPin, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import TermsConditionsModal from '../../components/TermsConditionsModal'
@@ -12,7 +12,7 @@ const steps = [
 ]
 
 export default function OnboardingPage() {
-  // const navigate = useNavigate()
+  const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [acceptedTerms, setAcceptedTerms] = useState(false)
