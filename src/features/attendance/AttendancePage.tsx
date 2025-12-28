@@ -30,7 +30,7 @@ export default function AttendancePage() {
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
   const [vendorId, setVendorId] = useState<string | null>(null)
-  const [menuPrices, setMenuPrices] = useState<{chapati: number, rice: number}>({ chapati: 50, rice: 70 })
+  const [_menuPrices, _setMenuPrices] = useState<{chapati: number, rice: number}>({ chapati: 50, rice: 70 })
   
   // Customer search states
   const [customerSearch, setCustomerSearch] = useState('')
