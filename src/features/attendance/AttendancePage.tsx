@@ -201,7 +201,7 @@ export default function AttendancePage() {
       const chapatiItem = data.find(item => item.name.toLowerCase().includes('chapati'))
       const riceItem = data.find(item => item.name.toLowerCase().includes('rice'))
       
-      setMenuPrices({
+      _setMenuPrices({
         chapati: chapatiItem?.price || 50,
         rice: riceItem?.price || 70
       })

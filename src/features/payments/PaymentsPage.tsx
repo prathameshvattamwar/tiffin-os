@@ -49,7 +49,7 @@ export default function PaymentsPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithPending | null>(null)
   const [vendorId, setVendorId] = useState<string | null>(null)
   const [vendorName, setVendorName] = useState('')
-  const [_menuPrices, _setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
+  // const [_menuPrices, _setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
 
   useEffect(() => {
     fetchData()
@@ -91,9 +91,9 @@ export default function PaymentsPage() {
           .select('name, price')
           .eq('vendor_id', vendor.id)
 
-        if (!menuError && menuData && menuData.length > 0) {
-          const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
-          const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
+        if (!menuError && _menuData && _menuData.length > 0) {
+          const chapatiItem = _menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
+          const riceItem = _menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
           chapatiPrice = chapatiItem?.price || 50
           ricePrice = riceItem?.price || 70
         }

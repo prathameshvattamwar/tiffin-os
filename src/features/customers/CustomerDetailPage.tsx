@@ -107,9 +107,9 @@ try {
     .select('name, price')
     .eq('vendor_id', customerData.vendor_id)
 
-  if (!menuError && menuData && menuData.length > 0) {
-    const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
-    const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
+  if (!menuError && _menuData && _menuData.length > 0) {
+    const chapatiItem = _menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
+    const riceItem = _menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
     chapatiPrice = chapatiItem?.price || 50
     ricePrice = riceItem?.price || 70
   }

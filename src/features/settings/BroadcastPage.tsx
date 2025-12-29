@@ -120,9 +120,9 @@ export default function BroadcastPage() {
     )
     if (!confirmed) return
 
-    setSending(true)
+    _setSending(true)
     setCurrentIndex(0)
-    setSentCount(0)
+    _setSentCount(0)
 
     const selectedList = customers.filter(c => selectedCustomers.has(c.id))
     
@@ -138,12 +138,12 @@ const openWhatsAppForCustomer = (customer: Customer, index: number, total: numbe
   const encodedMsg = encodeURIComponent(personalizedMsg)
   
   setCurrentIndex(index + 1)
-  setSentCount(index + 1)
+  _setSentCount(index + 1)
   
   window.open(`https://wa.me/91${phone}?text=${encodedMsg}`, '_blank')
   
   if (index + 1 >= total) {
-    setSending(false)
+    _setSending(false)
     alert(`✅ Completed! Opened WhatsApp for ${total} customers.`)
   }
 }
