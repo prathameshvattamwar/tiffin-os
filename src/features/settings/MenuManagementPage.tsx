@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Plus, Edit2, Trash2, UtensilsCrossed } from 'lucide-react'
+import { ArrowLeft, Plus, Edit2, Trash2, UtensilsCrossed, Lock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
 interface MenuItem {
@@ -11,6 +11,7 @@ interface MenuItem {
   monthly_price: number
   description: string
   is_active: boolean
+  is_default: boolean
 }
 
 export default function MenuManagementPage() {
@@ -20,6 +21,10 @@ export default function MenuManagementPage() {
   const [showModal, setShowModal] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [vendorId, setVendorId] = useState<string | null>(null)
+
+  // Separate default and custom items
+  const defaultItems = menuItems.filter(item => item.is_default)
+  const customItems = menuItems.filter(item => !item.is_default)
 
   const [formData, setFormData] = useState({
     item_name: '',
@@ -52,7 +57,8 @@ export default function MenuManagementPage() {
         .select('*')
         .eq('vendor_id', vendor.id)
         .eq('is_active', true)
-        .order('category', { ascending: true })
+        .order('is_default', { ascending: false })
+        .order('item_name', { ascending: true })
 
       setMenuItems(data || [])
     } catch (error) {
@@ -87,36 +93,53 @@ export default function MenuManagementPage() {
   }
 
   const handleSave = async () => {
-    if (!formData.item_name || !formData.walk_in_price || !formData.monthly_price) {
-      alert('Please fill all required fields')
-      return
+    // For default items, only price is required
+    if (editingItem?.is_default) {
+      if (!formData.monthly_price) {
+        alert('Please enter price')
+        return
+      }
+    } else {
+      if (!formData.item_name || !formData.monthly_price) {
+        alert('Please fill Item Name and Price')
+        return
+      }
     }
 
     if (!vendorId) return
 
     try {
       if (editingItem) {
+        // Update existing item
+        const updateData: any = {
+          walk_in_price: Number(formData.monthly_price), // Same price for both
+          monthly_price: Number(formData.monthly_price)
+        }
+        
+        // Only update name/category/description for custom items
+        if (!editingItem.is_default) {
+          updateData.item_name = formData.item_name
+          updateData.category = formData.category
+          updateData.description = formData.description
+        }
+
         await supabase
           .from('menu_items')
-          .update({
-            item_name: formData.item_name,
-            category: formData.category,
-            walk_in_price: Number(formData.walk_in_price),
-            monthly_price: Number(formData.monthly_price),
-            description: formData.description
-          })
+          .update(updateData)
           .eq('id', editingItem.id)
       } else {
+        // Insert new custom item
         await supabase
           .from('menu_items')
           .insert({
             vendor_id: vendorId,
             item_name: formData.item_name,
             category: formData.category,
-            walk_in_price: Number(formData.walk_in_price),
+            walk_in_price: Number(formData.monthly_price),
             monthly_price: Number(formData.monthly_price),
             description: formData.description,
-            is_active: true
+            is_active: true,
+            is_default: false
           })
       }
 
@@ -136,26 +159,6 @@ export default function MenuManagementPage() {
       .eq('id', id)
 
     fetchMenuItems()
-  }
-
-  const getCategoryEmoji = (cat: string) => {
-    switch (cat) {
-      case 'breakfast': return '🌅'
-      case 'lunch': return '☀️'
-      case 'dinner': return '🌙'
-      case 'snack': return '🍿'
-      default: return '🍽️'
-    }
-  }
-
-  const getCategoryColor = (cat: string) => {
-    switch (cat) {
-      case 'breakfast': return 'bg-yellow-100 text-yellow-700'
-      case 'lunch': return 'bg-orange-100 text-orange-700'
-      case 'dinner': return 'bg-purple-100 text-purple-700'
-      case 'snack': return 'bg-green-100 text-green-700'
-      default: return 'bg-gray-100 text-gray-700'
-    }
   }
 
   return (
@@ -184,73 +187,106 @@ export default function MenuManagementPage() {
       </div>
 
       {/* Content */}
-      <div className="px-5 py-4">
+      <div className="px-5 py-4 space-y-6">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="w-8 h-8 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : menuItems.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <UtensilsCrossed className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-800 mb-1">No menu items</h3>
-            <p className="text-gray-500 mb-4">Add your first menu item</p>
-            <button
-              onClick={openAddModal}
-              className="bg-orange-500 text-white px-6 py-2 rounded-xl font-medium"
-            >
-              Add Menu Item
-            </button>
-          </div>
         ) : (
-          <div className="space-y-3">
-            {menuItems.map(item => (
-              <div
-                key={item.id}
-                className="bg-white p-4 rounded-xl border border-gray-100"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">
-                    {getCategoryEmoji(item.category)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <h3 className="font-semibold text-gray-900">{item.item_name}</h3>
-                      <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${getCategoryColor(item.category)}`}>
-                        {item.category}
-                      </span>
-                    </div>
-                    {item.description && (
-                      <p className="text-sm text-gray-500 mb-2">{item.description}</p>
-                    )}
-                    <div className="flex gap-4 text-sm">
-                      <span className="text-gray-600">
-                        Walk-in: <span className="font-semibold text-gray-900">₹{item.walk_in_price}</span>
-                      </span>
-                      <span className="text-gray-600">
-                        Monthly: <span className="font-semibold text-green-600">₹{item.monthly_price}</span>
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => openEditModal(item)}
-                      className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item.id)}
-                      className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
+          <>
+            {/* Default Items Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <Lock className="w-4 h-4 text-orange-500" />
+                <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Default Items</h2>
               </div>
-            ))}
-          </div>
+              <div className="space-y-3">
+                {defaultItems.map(item => (
+                  <div
+                    key={item.id}
+                    className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-xl border border-orange-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center text-2xl">
+                        🍽️
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold text-gray-900">{item.item_name}</h3>
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-orange-200 text-orange-700">
+                            Default
+                          </span>
+                        </div>
+                        <p className="text-lg font-bold text-orange-600 mt-1">₹{item.monthly_price}</p>
+                      </div>
+                      <button
+                        onClick={() => openEditModal(item)}
+                        className="px-4 py-2 bg-white rounded-lg border border-orange-200 text-orange-600 text-sm font-medium hover:bg-orange-50"
+                      >
+                        Edit Price
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Custom Items Section */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <UtensilsCrossed className="w-4 h-4 text-gray-500" />
+                <h2 className="text-sm font-semibold text-gray-600 uppercase tracking-wide">Custom Items</h2>
+              </div>
+              
+              {customItems.length === 0 ? (
+                <div className="text-center py-8 bg-white rounded-xl border border-dashed border-gray-300">
+                  <p className="text-gray-500 mb-3">No custom items yet</p>
+                  <button
+                    onClick={openAddModal}
+                    className="text-orange-500 font-medium hover:underline"
+                  >
+                    + Add Item
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {customItems.map(item => (
+                    <div
+                      key={item.id}
+                      className="bg-white p-4 rounded-xl border border-gray-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center text-2xl">
+                          🍴
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900">{item.item_name}</h3>
+                          {item.description && (
+                            <p className="text-sm text-gray-500">{item.description}</p>
+                          )}
+                          <p className="text-lg font-bold text-gray-800 mt-1">₹{item.monthly_price}</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => openEditModal(item)}
+                            className="w-9 h-9 bg-gray-100 rounded-lg flex items-center justify-center text-gray-500 hover:bg-gray-200"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(item.id)}
+                            className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center text-red-500 hover:bg-red-100"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 
@@ -260,86 +296,56 @@ export default function MenuManagementPage() {
           <div className="w-full max-w-lg bg-white rounded-t-3xl" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-gray-100">
               <h2 className="text-lg font-bold text-gray-900">
-                {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
+                {editingItem 
+                  ? editingItem.is_default 
+                    ? `Edit ${editingItem.item_name} Price`
+                    : 'Edit Menu Item'
+                  : 'Add Menu Item'}
               </h2>
             </div>
 
             <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
-                <input
-                  type="text"
-                  value={formData.item_name}
-                  onChange={e => setFormData({ ...formData, item_name: e.target.value })}
-                  placeholder="e.g., Chapati Bhaji"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Category *</label>
-                <div className="grid grid-cols-4 gap-2">
-                  {[
-                    { value: 'breakfast', label: 'Breakfast', emoji: '🌅' },
-                    { value: 'lunch', label: 'Lunch', emoji: '☀️' },
-                    { value: 'dinner', label: 'Dinner', emoji: '🌙' },
-                    { value: 'snack', label: 'Snack', emoji: '🍿' }
-                  ].map(cat => (
-                    <button
-                      key={cat.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, category: cat.value as MenuItem['category'] })}
-                      className={`p-3 rounded-xl border-2 text-center transition ${
-                        formData.category === cat.value
-                          ? 'border-orange-500 bg-orange-50'
-                          : 'border-gray-200'
-                      }`}
-                    >
-                      <div className="text-xl mb-1">{cat.emoji}</div>
-                      <div className="text-xs font-medium">{cat.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Walk-in Price *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
+              
+              {/* Only show name/category for custom items */}
+              {(!editingItem || !editingItem.is_default) && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
                     <input
-                      type="number"
-                      value={formData.walk_in_price}
-                      onChange={e => setFormData({ ...formData, walk_in_price: e.target.value })}
-                      placeholder="80"
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                      type="text"
+                      value={formData.item_name}
+                      onChange={e => setFormData({ ...formData, item_name: e.target.value })}
+                      placeholder="e.g., Extra Roti, Salad"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Price *</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
-                    <input
-                      type="number"
-                      value={formData.monthly_price}
-                      onChange={e => setFormData({ ...formData, monthly_price: e.target.value })}
-                      placeholder="60"
-                      className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea
+                      value={formData.description}
+                      onChange={e => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Optional description"
+                      rows={2}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none"
                     />
                   </div>
-                </div>
-              </div>
+                </>
+              )}
 
+              {/* Price - always visible */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  value={formData.description}
-                  onChange={e => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Optional description"
-                  rows={2}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none resize-none"
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">Price *</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
+                  <input
+                    type="number"
+                    value={formData.monthly_price}
+                    onChange={e => setFormData({ ...formData, monthly_price: e.target.value })}
+                    placeholder="50"
+                    className="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 outline-none"
+                  />
+                </div>
               </div>
 
               <button

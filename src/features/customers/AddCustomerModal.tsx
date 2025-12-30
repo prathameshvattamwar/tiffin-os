@@ -22,8 +22,8 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
     meal_type: 'veg',
     // Meal Preferences (NEW)
     preferred_meal: 'lunch', // for one_time: 'lunch' or 'dinner'
-    lunch_meal_type: 'chapati_bhaji', // 'chapati_bhaji', 'rice_plate', 'both'
-    dinner_meal_type: 'chapati_bhaji',
+    lunch_meal_type: 'half_thali',
+    dinner_meal_type: 'half_thali',
     // Step 3: Subscription
     start_date: '',
     end_date: '',
@@ -368,8 +368,8 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                         </label>
                         <div className="grid grid-cols-2 gap-3">
                           {[
-                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
-                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                            { value: 'half_thali', label: 'Half Thali', emoji: '🍽️' },
+                            { value: 'full_thali', label: 'Full Thali', emoji: '🍱' }
                           ].map(type => (
                             <button
                               key={type.value}
@@ -401,8 +401,8 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                         <label className="block text-sm font-medium text-gray-700 mb-2">🌅 Lunch मध्ये काय?</label>
                         <div className="grid grid-cols-2 gap-3">
                           {[
-                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
-                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                            { value: 'half_thali', label: 'Half Thali', emoji: '🍽️' },
+                            { value: 'full_thali', label: 'Full Thali', emoji: '🍱' }
                           ].map(type => (
                             <button
                               key={type.value}
@@ -425,8 +425,8 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                         <label className="block text-sm font-medium text-gray-700 mb-2">🌙 Dinner मध्ये काय?</label>
                         <div className="grid grid-cols-2 gap-3">
                           {[
-                            { value: 'chapati_bhaji', label: 'Chapati Bhaji', emoji: '🫓' },
-                            { value: 'rice_plate', label: 'Rice Plate', emoji: '🍚' }
+                            { value: 'half_thali', label: 'Half Thali', emoji: '🍽️' },
+                            { value: 'full_thali', label: 'Full Thali', emoji: '🍱' }
                           ].map(type => (
                             <button
                               key={type.value}
@@ -560,15 +560,15 @@ export default function AddCustomerModal({ onClose, onSuccess }: AddCustomerModa
                 <div className="text-sm text-blue-700 space-y-1">
                   {formData.meal_frequency === 'two_times' ? (
                     <>
-                      <p>🌅 Lunch: {formData.lunch_meal_type === 'chapati_bhaji' ? 'Chapati Bhaji' : 'Rice Plate'}</p>
-                      <p>🌙 Dinner: {formData.dinner_meal_type === 'chapati_bhaji' ? 'Chapati Bhaji' : 'Rice Plate'}</p>
+                      <p>🌅 Lunch: {formData.lunch_meal_type === 'half_thali' ? 'Half Thali' : 'Full Thali'}</p>
+                      <p>🌙 Dinner: {formData.dinner_meal_type === 'half_thali' ? 'Half Thali' : 'Full Thali'}</p>
                     </>
                   ) : (
                     <p>
                       {formData.preferred_meal === 'lunch' ? '🌅 Lunch' : '🌙 Dinner'}: {' '}
-                      {(formData.preferred_meal === 'lunch' ? formData.lunch_meal_type : formData.dinner_meal_type) === 'chapati_bhaji' 
-                        ? 'Chapati Bhaji' 
-                        : 'Rice Plate'}
+                      {(formData.preferred_meal === 'lunch' ? formData.lunch_meal_type : formData.dinner_meal_type) === 'half_thali' 
+                        ? 'Half Thali' 
+                        : 'Full Thali'}
                     </p>
                   )}
                   <p className="text-blue-600 capitalize">Type: {formData.meal_type.replace('_', '-')}</p>

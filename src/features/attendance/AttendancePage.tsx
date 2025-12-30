@@ -20,6 +20,8 @@ interface AttendanceRecord {
   lunch_taken: boolean
   dinner_taken: boolean
   guest_count: number
+  guest_lunch_count: number
+  guest_dinner_count: number
   is_cancelled: boolean
   notes: string
 }
@@ -39,7 +41,7 @@ export default function AttendancePage() {
   
   // Quick mode states
   const [selectedDate, setSelectedDate] = useState(new Date())
-  const [quickAttendance, setQuickAttendance] = useState<Map<string, { lunch: boolean; dinner: boolean; guests: number }>>(new Map())
+  const [quickAttendance, setQuickAttendance] = useState<Map<string, { lunch: boolean; dinner: boolean; guestLunch: number; guestDinner: number }>>(new Map())
   
   // Calendar mode states
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -48,7 +50,8 @@ export default function AttendancePage() {
   const [dayFormData, setDayFormData] = useState({
     lunch: false,
     dinner: false,
-    guests: 0,
+    guestLunch: 0,
+    guestDinner: 0,
     cancelled: false,
     notes: ''
   })
@@ -167,17 +170,18 @@ export default function AttendancePage() {
     // Fetch selected date's attendance
     const { data: attendanceData } = await supabase
       .from('attendance')
-      .select('customer_id, lunch_taken, dinner_taken, guest_count')
+      .select('customer_id, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count')
       .eq('vendor_id', vendor.id)
       .eq('attendance_date', selectedDateStr)
 
     // Populate quickAttendance Map
-    const newMap = new Map<string, { lunch: boolean; dinner: boolean; guests: number }>()
+    const newMap = new Map<string, { lunch: boolean; dinner: boolean; guestLunch: number; guestDinner: number }>()
     attendanceData?.forEach(record => {
       newMap.set(record.customer_id, {
         lunch: record.lunch_taken || false,
         dinner: record.dinner_taken || false,
-        guests: record.guest_count || 0
+        guestLunch: record.guest_lunch_count || 0,
+        guestDinner: record.guest_dinner_count || 0
       })
     })
     setQuickAttendance(newMap)
@@ -224,7 +228,7 @@ export default function AttendancePage() {
 
     const { data } = await supabase
       .from('attendance')
-      .select('attendance_date, lunch_taken, dinner_taken, guest_count, is_cancelled, notes')
+      .select('attendance_date, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count, is_cancelled, notes')
       .eq('customer_id', selectedCustomer.id)
       .gte('attendance_date', startDate)
       .lte('attendance_date', endDate)
@@ -236,6 +240,8 @@ export default function AttendancePage() {
         lunch_taken: r.lunch_taken || false,
         dinner_taken: r.dinner_taken || false,
         guest_count: r.guest_count || 0,
+        guest_lunch_count: r.guest_lunch_count || 0,
+        guest_dinner_count: r.guest_dinner_count || 0,
         is_cancelled: r.is_cancelled || false,
         notes: r.notes || ''
       })
@@ -243,11 +249,10 @@ export default function AttendancePage() {
     setCustomerAttendance(map)
   }
 
-  // Quick mode: Toggle meal
-  const toggleQuickMeal = async (customerId: string, meal: 'lunch' | 'dinner') => {
+    const toggleQuickMeal = async (customerId: string, meal: 'lunch' | 'dinner') => {
     if (!vendorId) return
 
-    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guests: 0 }
+    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guestLunch: 0, guestDinner: 0 }
     const updated = { ...current, [meal]: !current[meal] }
 
     // Optimistic update
@@ -262,17 +267,22 @@ export default function AttendancePage() {
       attendance_date: dateStr,
       lunch_taken: updated.lunch,
       dinner_taken: updated.dinner,
-      guest_count: updated.guests,
+      guest_count: updated.guestLunch + updated.guestDinner,
+      guest_lunch_count: updated.guestLunch,
+      guest_dinner_count: updated.guestDinner,
       meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
     }, { onConflict: 'customer_id,attendance_date' })
   }
 
-  const updateQuickGuests = async (customerId: string, change: number) => {
+    const updateQuickGuests = async (customerId: string, meal: 'lunch' | 'dinner', change: number) => {
     if (!vendorId) return
 
-    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guests: 0 }
-    const newGuests = Math.max(0, current.guests + change)
-    const updated = { ...current, guests: newGuests }
+    const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guestLunch: 0, guestDinner: 0 }
+    
+    const newGuestLunch = meal === 'lunch' ? Math.max(0, current.guestLunch + change) : current.guestLunch
+    const newGuestDinner = meal === 'dinner' ? Math.max(0, current.guestDinner + change) : current.guestDinner
+    
+    const updated = { ...current, guestLunch: newGuestLunch, guestDinner: newGuestDinner }
 
     const newMap = new Map(quickAttendance)
     newMap.set(customerId, updated)
@@ -285,7 +295,9 @@ export default function AttendancePage() {
       attendance_date: dateStr,
       lunch_taken: updated.lunch,
       dinner_taken: updated.dinner,
-      guest_count: newGuests,
+      guest_count: newGuestLunch + newGuestDinner,
+      guest_lunch_count: newGuestLunch,
+      guest_dinner_count: newGuestDinner,
       meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
     }, { onConflict: 'customer_id,attendance_date' })
   }
@@ -336,7 +348,8 @@ export default function AttendancePage() {
     setDayFormData({
       lunch: record?.lunch_taken || false,
       dinner: record?.dinner_taken || false,
-      guests: record?.guest_count || 0,
+      guestLunch: record?.guest_lunch_count || 0,
+      guestDinner: record?.guest_dinner_count || 0,
       cancelled: record?.is_cancelled || false,
       notes: record?.notes || ''
     })
@@ -352,7 +365,9 @@ export default function AttendancePage() {
       attendance_date: showDayModal,
       lunch_taken: dayFormData.lunch,
       dinner_taken: dayFormData.dinner,
-      guest_count: dayFormData.guests,
+      guest_count: dayFormData.guestLunch + dayFormData.guestDinner,
+      guest_lunch_count: dayFormData.guestLunch,
+      guest_dinner_count: dayFormData.guestDinner,
       is_cancelled: dayFormData.cancelled,
       notes: dayFormData.notes,
       meal_taken: dayFormData.cancelled ? 'cancelled' : (dayFormData.lunch || dayFormData.dinner) ? 'present' : 'absent'
@@ -374,7 +389,9 @@ export default function AttendancePage() {
   // Stats
   const lunchCount = Array.from(quickAttendance.values()).filter(a => a.lunch).length
   const dinnerCount = Array.from(quickAttendance.values()).filter(a => a.dinner).length
-  const guestCount = Array.from(quickAttendance.values()).reduce((sum, a) => sum + a.guests, 0)
+  const guestLunchCount = Array.from(quickAttendance.values()).reduce((sum, a) => sum + a.guestLunch, 0)
+  const guestDinnerCount = Array.from(quickAttendance.values()).reduce((sum, a) => sum + a.guestDinner, 0)
+  const guestCount = guestLunchCount + guestDinnerCount
 
   // Filter customers for search
   const filteredCustomers = customers.filter(c =>
@@ -546,7 +563,7 @@ export default function AttendancePage() {
                   <p className="text-gray-500">No customers found</p>
                 </div>
               ) : filteredCustomers.map(customer => {
-              const data = quickAttendance.get(customer.id) || { lunch: false, dinner: false, guests: 0 }
+              const data = quickAttendance.get(customer.id) || { lunch: false, dinner: false, guestLunch: 0, guestDinner: 0 }
               const mealFreq = customer.subscription?.meal_frequency
               const endDate = customer.subscription?.end_date
               
@@ -557,6 +574,7 @@ export default function AttendancePage() {
               
               return (
                 <div key={customer.id} className="bg-white p-4 rounded-xl border border-gray-100">
+                  {/* Customer Header */}
                   <div className="flex items-center gap-3 mb-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-semibold">
                       {customer.full_name.charAt(0)}
@@ -574,8 +592,8 @@ export default function AttendancePage() {
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
-                    {/* Lunch Button */}
+                  {/* Meal Buttons Row */}
+                  <div className="flex items-center gap-2 mb-3">
                     <button
                       onClick={() => toggleQuickMeal(customer.id, 'lunch')}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition flex items-center justify-center gap-1 ${
@@ -588,7 +606,6 @@ export default function AttendancePage() {
                       Lunch
                     </button>
                     
-                    {/* Dinner Button - only show if two_times */}
                     {mealFreq === 'two_times' && (
                       <button
                         onClick={() => toggleQuickMeal(customer.id, 'dinner')}
@@ -602,29 +619,57 @@ export default function AttendancePage() {
                         Dinner
                       </button>
                     )}
+                  </div>
+
+                  {/* Guest Row */}
+                  <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+                    <span className="text-xs text-gray-500 font-medium">Guest:</span>
                     
-                    {/* Guest Counter */}
-                    <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs">Lunch</span>
                       <button
-                        onClick={() => updateQuickGuests(customer.id, -1)}
-                        disabled={data.guests === 0}
-                        className="w-8 h-8 rounded flex items-center justify-center text-gray-500 disabled:opacity-30"
+                        onClick={() => updateQuickGuests(customer.id, 'lunch', -1)}
+                        disabled={data.guestLunch === 0}
+                        className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-gray-500 disabled:opacity-30 text-xs"
                       >
-                        <Minus className="w-4 h-4" />
+                        -
                       </button>
-                      <span className={`w-8 text-center font-semibold ${data.guests > 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-                        {data.guests}
+                      <span className={`w-5 text-center text-sm font-semibold ${data.guestLunch > 0 ? 'text-orange-600' : 'text-gray-400'}`}>
+                        {data.guestLunch}
                       </span>
                       <button
-                        onClick={() => updateQuickGuests(customer.id, 1)}
-                        className="w-8 h-8 rounded flex items-center justify-center text-blue-600"
+                        onClick={() => updateQuickGuests(customer.id, 'lunch', 1)}
+                        className="w-6 h-6 rounded bg-orange-100 flex items-center justify-center text-orange-600 text-xs"
                       >
-                        <Plus className="w-4 h-4" />
+                        +
                       </button>
                     </div>
+
+                    {mealFreq === 'two_times' && (
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs ml-5">Dinner</span>
+                        <button
+                          onClick={() => updateQuickGuests(customer.id, 'dinner', -1)}
+                          disabled={data.guestDinner === 0}
+                          className="w-6 h-6 rounded bg-gray-100 flex items-center justify-center text-gray-500 disabled:opacity-30 text-xs"
+                        >
+                          -
+                        </button>
+                        <span className={`w-5 text-center text-sm font-semibold ${data.guestDinner > 0 ? 'text-purple-600' : 'text-gray-400'}`}>
+                          {data.guestDinner}
+                        </span>
+                        <button
+                          onClick={() => updateQuickGuests(customer.id, 'dinner', 1)}
+                          className="w-6 h-6 rounded bg-purple-100 flex items-center justify-center text-purple-600 text-xs"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               )
+
             })}
           </div>
         ) : !selectedCustomer ? (
@@ -750,25 +795,47 @@ export default function AttendancePage() {
                 )}
               </div>
 
-              {/* Guest Counter */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                <span className="font-medium text-gray-800">👥 Guests</span>
+              {/* Guest Lunch Counter */}
+              <div className="flex items-center justify-between p-4 bg-orange-50 rounded-xl">
+                <span className="font-medium text-orange-800">🌅 Guest Lunch</span>
                 <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setDayFormData({ ...dayFormData, guests: Math.max(0, dayFormData.guests - 1) })}
-                    className="w-10 h-10 bg-white rounded-lg border border-gray-200 flex items-center justify-center"
+                    onClick={() => setDayFormData({ ...dayFormData, guestLunch: Math.max(0, dayFormData.guestLunch - 1) })}
+                    className="w-10 h-10 bg-white rounded-lg border border-orange-200 flex items-center justify-center"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
-                  <span className="w-8 text-center font-bold text-lg">{dayFormData.guests}</span>
+                  <span className="w-8 text-center font-bold text-lg text-orange-600">{dayFormData.guestLunch}</span>
                   <button
-                    onClick={() => setDayFormData({ ...dayFormData, guests: dayFormData.guests + 1 })}
-                    className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600"
+                    onClick={() => setDayFormData({ ...dayFormData, guestLunch: dayFormData.guestLunch + 1 })}
+                    className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
                 </div>
               </div>
+
+              {/* Guest Dinner Counter */}
+              {selectedCustomer?.subscription?.meal_frequency === 'two_times' && (
+                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-xl">
+                  <span className="font-medium text-purple-800">🌙 Guest Dinner</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setDayFormData({ ...dayFormData, guestDinner: Math.max(0, dayFormData.guestDinner - 1) })}
+                      className="w-10 h-10 bg-white rounded-lg border border-purple-200 flex items-center justify-center"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-8 text-center font-bold text-lg text-purple-600">{dayFormData.guestDinner}</span>
+                    <button
+                      onClick={() => setDayFormData({ ...dayFormData, guestDinner: dayFormData.guestDinner + 1 })}
+                      className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center text-purple-600"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Cancelled */}
               <label className="flex items-center gap-3 p-4 bg-red-50 rounded-xl cursor-pointer">

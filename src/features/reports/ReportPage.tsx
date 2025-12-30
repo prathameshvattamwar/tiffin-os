@@ -4,10 +4,8 @@ import { ArrowLeft, MessageCircle, Calendar, IndianRupee, UtensilsCrossed, User,
 import { supabase } from '../../lib/supabase'
 
 interface MenuPrices {
-  chapati_lunch: number
-  rice_lunch: number
-  chapati_dinner: number
-  rice_dinner: number
+  half_thali: number
+  full_thali: number
 }
 
 interface ReportData {
@@ -35,6 +33,8 @@ interface ReportData {
     dinnerCount: number
     totalMeals: number
     guestCount: number
+    guestLunchCount: number
+    guestDinnerCount: number
   }
   payments: {
     total_paid: number
@@ -53,11 +53,9 @@ export default function ReportPage() {
   const [loading, setLoading] = useState(true)
   const [billingType, setBillingType] = useState<'monthly' | 'per_meal'>('monthly')
   const [menuPrices, setMenuPrices] = useState<MenuPrices>({
-    chapati_lunch: 50,
-    rice_lunch: 70,
-    chapati_dinner: 50,
-    rice_dinner: 70
-  })
+  half_thali: 50,
+  full_thali: 70
+})
 
   useEffect(() => {
     if (id) fetchReportData()
@@ -79,20 +77,19 @@ export default function ReportPage() {
 
       // Fetch menu prices
       const { data: menuData } = await supabase
-        .from('menu_items')
-        .select('name, price')
-        .eq('vendor_id', vendor.id)
+      .from('menu_items')
+      .select('item_name, monthly_price')
+      .eq('vendor_id', vendor.id)
+      .eq('is_default', true)
 
       if (menuData) {
-        const chapatiItem = menuData.find(m => m.name.toLowerCase().includes('chapati'))
-        const riceItem = menuData.find(m => m.name.toLowerCase().includes('rice'))
+        const halfThali = menuData.find(m => m.item_name === 'Half Thali')
+        const fullThali = menuData.find(m => m.item_name === 'Full Thali')
         setMenuPrices({
-          chapati_lunch: chapatiItem?.price || 50,
-          rice_lunch: riceItem?.price || 70,
-          chapati_dinner: chapatiItem?.price || 50,
-          rice_dinner: riceItem?.price || 70
+          half_thali: halfThali?.monthly_price || 50,
+          full_thali: fullThali?.monthly_price || 70
         })
-      }
+      } 
 
       // Fetch customer
       const { data: customer } = await supabase
@@ -112,7 +109,7 @@ export default function ReportPage() {
       // Fetch attendance stats
       const { data: attendanceData } = await supabase
         .from('attendance')
-        .select('attendance_date, lunch_taken, dinner_taken, guest_count')
+        .select('attendance_date, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count')
         .eq('customer_id', id)
 
       // Calculate attendance metrics
@@ -123,6 +120,8 @@ export default function ReportPage() {
       const dinnerCount = attendanceData?.filter(a => a.dinner_taken).length || 0
       const totalMeals = lunchCount + dinnerCount
       const guestCount = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
+      const guestLunchCount = attendanceData?.reduce((sum, a) => sum + (a.guest_lunch_count || 0), 0) || 0
+      const guestDinnerCount = attendanceData?.reduce((sum, a) => sum + (a.guest_dinner_count || 0), 0) || 0
 
       // Fetch payments
       const { data: paymentsData } = await supabase
@@ -142,7 +141,9 @@ export default function ReportPage() {
           lunchCount, 
           dinnerCount, 
           totalMeals, 
-          guestCount
+          guestCount,
+          guestLunchCount,
+          guestDinnerCount
         },
         payments: {
           total_paid: totalPaid,
@@ -157,18 +158,16 @@ export default function ReportPage() {
     }
   }
 
-  // Calculate amounts based on billing type
 const calculateBill = () => {
-  if (!report) return { mealCharges: 0, guestCharges: 0, totalDue: 0, pending: 0, lunchPrice: 0, dinnerPrice: 0, avgMealPrice: 0 }
+  if (!report) return { mealCharges: 0, guestCharges: 0, guestLunchCharges: 0, guestDinnerCharges: 0, totalDue: 0, pending: 0, lunchPrice: 0, dinnerPrice: 0 }
 
   let mealCharges = 0
-  let guestCharges = 0
 
-  const lunchType = report.customer.lunch_meal_type || 'chapati_bhaji'
-  const dinnerType = report.customer.dinner_meal_type || 'chapati_bhaji'
-  
-  const lunchPrice = lunchType === 'rice_plate' ? menuPrices.rice_lunch : menuPrices.chapati_lunch
-  const dinnerPrice = dinnerType === 'rice_plate' ? menuPrices.rice_dinner : menuPrices.chapati_dinner
+  const lunchType = report.customer.lunch_meal_type || 'half_thali'
+  const dinnerType = report.customer.dinner_meal_type || 'half_thali'
+
+  const lunchPrice = lunchType === 'full_thali' ? menuPrices.full_thali : menuPrices.half_thali
+  const dinnerPrice = dinnerType === 'full_thali' ? menuPrices.full_thali : menuPrices.half_thali
 
   if (billingType === 'monthly') {
     mealCharges = report.subscription?.plan_amount || 0
@@ -176,15 +175,17 @@ const calculateBill = () => {
     mealCharges = (report.attendance.lunchCount * lunchPrice) + (report.attendance.dinnerCount * dinnerPrice)
   }
 
-  const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
-  guestCharges = report.attendance.guestCount * avgMealPrice
+  // Guest charges - separate for lunch and dinner
+  const guestLunchCharges = report.attendance.guestLunchCount * lunchPrice
+  const guestDinnerCharges = report.attendance.guestDinnerCount * dinnerPrice
+  const guestCharges = guestLunchCharges + guestDinnerCharges
 
   const totalDue = mealCharges + guestCharges
   
   // Pending can be negative (means refund/carry forward)
   const pending = totalDue - report.payments.total_paid
 
-  return { mealCharges, guestCharges, totalDue, pending, lunchPrice, dinnerPrice, avgMealPrice }
+  return { mealCharges, guestCharges, guestLunchCharges, guestDinnerCharges, totalDue, pending, lunchPrice, dinnerPrice }
 }
 
   const billDetails = calculateBill()
@@ -198,8 +199,8 @@ const calculateBill = () => {
   }
 
   const getMealTypeLabel = (type: string) => {
-    return type === 'chapati_bhaji' ? 'Chapati Bhaji' : type === 'rice_plate' ? 'Rice Plate' : 'Both'
-  }
+  return type === 'half_thali' ? 'Half Thali' : type === 'full_thali' ? 'Full Thali' : 'Half Thali'
+}
 
 const generateWhatsAppMessage = () => {
   if (!report) return ''
@@ -230,7 +231,8 @@ ${report.subscription ? `📅 *Period:* ${formatDate(report.subscription.start_d
 🌅 Lunch: *${report.attendance.lunchCount} meals*
 🌙 Dinner: *${report.attendance.dinnerCount} meals*
 🍱 Total: *${report.attendance.totalMeals} meals*
-${report.attendance.guestCount > 0 ? `👥 Guests: *${report.attendance.guestCount} meals*` : ''}
+${report.attendance.guestLunchCount > 0 ? `👥 Guest Lunch: *${report.attendance.guestLunchCount} meals*` : ''}
+${report.attendance.guestDinnerCount > 0 ? `👥 Guest Dinner: *${report.attendance.guestDinnerCount} meals*` : ''}
 
 *💰 BILL DETAILS (${billingType === 'monthly' ? 'Monthly' : 'Per Meal'})*
 ────────────────────
@@ -239,7 +241,8 @@ ${billingType === 'per_meal'
 🌙 Dinner: ${report.attendance.dinnerCount} × ₹${bill.dinnerPrice} = ₹${(report.attendance.dinnerCount * bill.dinnerPrice).toLocaleString()}
 📊 Meal Total: ₹${bill.mealCharges.toLocaleString()}`
   : `📅 Plan Amount: ₹${bill.mealCharges.toLocaleString()}`}
-${bill.guestCharges > 0 ? `👥 Guest: ${report.attendance.guestCount} × ₹${bill.avgMealPrice} = ₹${bill.guestCharges.toLocaleString()}` : ''}
+${bill.guestLunchCharges > 0 ? `👥 Guest Lunch: ${report.attendance.guestLunchCount} × ₹${bill.lunchPrice} = ₹${bill.guestLunchCharges.toLocaleString()}` : ''}
+${bill.guestDinnerCharges > 0 ? `👥 Guest Dinner: ${report.attendance.guestDinnerCount} × ₹${bill.dinnerPrice} = ₹${bill.guestDinnerCharges.toLocaleString()}` : ''}
 
 📋 *Total Bill: ₹${bill.totalDue.toLocaleString()}*
 ✅ Paid: ₹${report.payments.total_paid.toLocaleString()}
@@ -326,7 +329,7 @@ Thank you! 🙏
             >
               <div className="text-2xl mb-1">🍽️</div>
               <div className="font-semibold text-gray-900">Per Meal</div>
-              <div className="text-xs text-gray-500">₹{menuPrices.chapati_lunch}-{menuPrices.rice_lunch}/meal</div>
+              <div className="text-xs text-gray-500">₹{menuPrices.half_thali}-{menuPrices.full_thali}/meal</div>
             </button>
           </div>
         </div>
@@ -460,24 +463,44 @@ Thank you! 🙏
               <span className="text-xl font-bold text-green-600">{report.attendance.totalMeals}</span>
             </div>
 
-            {/* Guest Meals */}
-            {report.attendance.guestCount > 0 && (
-              <div className="flex items-center justify-between py-3">
+            {/* Guest Lunch */}
+            {report.attendance.guestLunchCount > 0 && (
+              <div className="flex items-center justify-between py-3 border-b border-gray-100">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
-                    <Users className="w-5 h-5 text-amber-600" />
+                  <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                    <span className="text-lg">🌅</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">Guest Meals</span>
-                    <p className="text-xs text-gray-400">₹{billDetails.avgMealPrice}/meal</p>
+                    <span className="text-gray-600">Guest Lunch</span>
+                    <p className="text-xs text-gray-400">₹{billDetails.lunchPrice}/meal</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <span className="text-xl font-bold text-amber-600">{report.attendance.guestCount}</span>
-                  <p className="text-xs text-gray-400">= ₹{billDetails.guestCharges}</p>
+                  <span className="text-xl font-bold text-orange-600">{report.attendance.guestLunchCount}</span>
+                  <p className="text-xs text-gray-400">= ₹{billDetails.guestLunchCharges}</p>
                 </div>
               </div>
             )}
+
+            {/* Guest Dinner */}
+            {report.attendance.guestDinnerCount > 0 && (
+              <div className="flex items-center justify-between py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                    <span className="text-lg">🌙</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-600">Guest Dinner</span>
+                    <p className="text-xs text-gray-400">₹{billDetails.dinnerPrice}/meal</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-xl font-bold text-purple-600">{report.attendance.guestDinnerCount}</span>
+                  <p className="text-xs text-gray-400">= ₹{billDetails.guestDinnerCharges}</p>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
 
@@ -517,11 +540,19 @@ Thank you! 🙏
       </div>
     )}
 
-    {/* Guest Charges */}
-    {billDetails.guestCharges > 0 && (
-      <div className="flex justify-between">
-        <span className="text-gray-600">👥 Guest ({report.attendance.guestCount} × ₹{billDetails.avgMealPrice})</span>
-        <span className="font-medium">+ ₹{billDetails.guestCharges.toLocaleString()}</span>
+    {/* Guest Lunch Charges */}
+    {billDetails.guestLunchCharges > 0 && (
+      <div className="flex justify-between text-sm">
+        <span className="text-gray-600">🌅 Guest Lunch ({report.attendance.guestLunchCount} × ₹{billDetails.lunchPrice})</span>
+        <span className="font-medium">+ ₹{billDetails.guestLunchCharges.toLocaleString()}</span>
+      </div>
+    )}
+
+    {/* Guest Dinner Charges */}
+    {billDetails.guestDinnerCharges > 0 && (
+      <div className="flex justify-between text-sm">
+        <span className="text-gray-600">🌙 Guest Dinner ({report.attendance.guestDinnerCount} × ₹{billDetails.dinnerPrice})</span>
+        <span className="font-medium">+ ₹{billDetails.guestDinnerCharges.toLocaleString()}</span>
       </div>
     )}
     
