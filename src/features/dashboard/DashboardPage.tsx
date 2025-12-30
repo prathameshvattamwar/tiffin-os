@@ -1,9 +1,12 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useVendor } from '../../context/VendorContext'
+import { useDashboardStats } from '../../hooks/useQueries'
 import { useNavigate } from 'react-router-dom'
 import { Users, IndianRupee, UtensilsCrossed, TrendingUp, Plus, CalendarCheck, ShoppingBag, AlertCircle, Crown, Clock } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Skeleton, CardSkeleton } from '../../components/ui/Skeleton'
 import { useLanguage } from '../../lib/language'
+
 
 interface DashboardStats {
   totalCustomers: number
@@ -30,123 +33,19 @@ const PLAN_LIMITS: Record<string, number> = {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { t } = useLanguage()
-  const [loading, setLoading] = useState(true)
-  const [vendorName, setVendorName] = useState('')
-  const [vendorPlan, setVendorPlan] = useState<VendorPlan | null>(null)
-  const [stats, setStats] = useState<DashboardStats>({
-    totalCustomers: 0,
-    totalPending: 0,
-    todayMeals: 0,
-    thisMonthCollection: 0,
-    expiringCount: 0
-  })
+  const { vendor } = useVendor()
+    const { data: stats, isLoading: loading } = useDashboardStats()
+    const [vendorPlan, setVendorPlan] = useState<VendorPlan | null>(null)
 
-  useEffect(() => {
-    fetchDashboardData()
-  }, [])
-
-  const fetchDashboardData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id, business_name, owner_name, subscription_plan, plan_start_date, plan_end_date')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-      setVendorName(vendor.business_name || vendor.owner_name || 'User')
-      setVendorPlan({
-        subscription_plan: vendor.subscription_plan || 'free_trial',
-        plan_start_date: vendor.plan_start_date || new Date().toISOString().split('T')[0],
-        plan_end_date: vendor.plan_end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-      })
-
-      // 1. Total Active Customers
-      const { count: customerCount } = await supabase
-        .from('customers')
-        .select('*', { count: 'exact', head: true })
-        .eq('vendor_id', vendor.id)
-        .eq('is_active', true)
-
-      // 2. Get all subscriptions
-      const { data: subscriptions } = await supabase
-        .from('subscriptions')
-        .select('id, customer_id, plan_amount, end_date, status')
-        .eq('vendor_id', vendor.id)
-        .eq('status', 'active')
-
-      // 3. Get all payments
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('customer_id, amount, payment_date')
-        .eq('vendor_id', vendor.id)
-
-      // 4. Get all attendance for guest charges
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('customer_id, guest_count, lunch_taken, dinner_taken, attendance_date')
-        .eq('vendor_id', vendor.id)
-
-      // Calculate stats
-      const today = new Date()
-      const todayStr = today.toISOString().split('T')[0]
-      const sevenDaysLater = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000)
-
-      let totalPending = 0
-      let expiringCount = 0
-
-      // Calculate pending for each subscription
-      subscriptions?.forEach(sub => {
-        // Customer payments
-        const customerPayments = payments?.filter(p => p.customer_id === sub.customer_id) || []
-        const totalPaid = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-        
-        // Guest charges (₹40 per guest)
-        const customerAttendance = attendanceData?.filter(a => a.customer_id === sub.customer_id) || []
-        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
-        const guestCharges = totalGuests * 40
-        
-        // Pending amount
-        const pending = Math.max(0, Number(sub.plan_amount) + guestCharges - totalPaid)
-        totalPending += pending
-
-        // Check expiring subscriptions
-        const endDate = new Date(sub.end_date)
-        if (endDate <= sevenDaysLater && endDate >= today) {
-          expiringCount++
-        }
-      })
-
-      // Today's Meals (lunch + dinner)
-      const todayAttendance = attendanceData?.filter(a => a.attendance_date === todayStr) || []
-      let todayMeals = 0
-      todayAttendance.forEach(a => {
-        if (a.lunch_taken) todayMeals++
-        if (a.dinner_taken) todayMeals++
-      })
-
-      // This Month Collection
-      const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
-      const thisMonthPayments = payments?.filter(p => p.payment_date >= firstOfMonth) || []
-      const thisMonthCollection = thisMonthPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-
-      setStats({
-        totalCustomers: customerCount || 0,
-        totalPending,
-        todayMeals,
-        thisMonthCollection,
-        expiringCount
-      })
-
-    } catch (error) {
-      console.error('Error fetching dashboard:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    useState(() => {
+      if (vendor) {
+        setVendorPlan({
+          subscription_plan: (vendor as any).subscription_plan || 'free_trial',
+          plan_start_date: (vendor as any).plan_start_date || new Date().toISOString().split('T')[0],
+          plan_end_date: (vendor as any).plan_end_date || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        })
+      }
+    })
 
   const getGreeting = () => {
     const hour = new Date().getHours()
@@ -177,7 +76,7 @@ export default function DashboardPage() {
   // Check if at customer limit
   const isAtLimit = () => {
     const limit = getCustomerLimit()
-    return stats.totalCustomers >= limit
+    return safeStats.totalCustomers >= limit
   }
 
   // Get plan display name
@@ -192,6 +91,13 @@ export default function DashboardPage() {
     return planNames[vendorPlan?.subscription_plan || 'free_trial'] || 'Free Trial'
   }
 
+const safeStats = stats || {
+    totalCustomers: 0,
+    totalPending: 0,
+    todayMeals: 0,
+    thisMonthCollection: 0,
+    expiringCount: 0
+  }
   const daysRemaining = getDaysRemaining()
   const isTrialExpiringSoon = vendorPlan?.subscription_plan === 'free_trial' && daysRemaining <= 7
   const isTrialExpired = vendorPlan?.subscription_plan === 'free_trial' && daysRemaining <= 0
@@ -230,7 +136,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-lg font-bold text-gray-900">{getGreeting()}</h1>
-            <p className="text-gray-500">{vendorName}</p>
+            <p className="text-gray-500">{vendor?.business_name || vendor?.owner_name || 'User'}</p>
           </div>
           <div className="flex items-center gap-2">
             {/* Plan Badge */}
@@ -244,7 +150,7 @@ export default function DashboardPage() {
               {getPlanName()}
             </div>
             <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-amber-400 rounded-full flex items-center justify-center text-white font-bold">
-              {vendorName.charAt(0).toUpperCase()}
+              {(vendor?.business_name || vendor?.owner_name || 'U').charAt(0).toUpperCase()}
             </div>
           </div>
         </div>
@@ -307,7 +213,7 @@ export default function DashboardPage() {
         )}
 
         {/* Expiring Subscriptions Alert */}
-        {stats.expiringCount > 0 && (
+        {safeStats.expiringCount > 0 && (
           <div 
             onClick={() => navigate('/customers')}
             className="bg-orange-50 border border-orange-200 rounded-xl p-4 flex items-center gap-3 cursor-pointer"
@@ -316,7 +222,7 @@ export default function DashboardPage() {
               <AlertCircle className="w-5 h-5 text-orange-500" />
             </div>
             <div className="flex-1">
-              <p className="font-semibold text-orange-800">{stats.expiringCount} subscription{stats.expiringCount > 1 ? 's' : ''} expiring soon</p>
+              <p className="font-semibold text-orange-800">{safeStats.expiringCount} subscription{safeStats.expiringCount > 1 ? 's' : ''} expiring soon</p>
               <p className="text-sm text-orange-600">Tap to view and renew</p>
             </div>
           </div>
@@ -332,7 +238,7 @@ export default function DashboardPage() {
               <Users className="w-5 h-5 text-blue-500" />
             </div>
             <p className="text-2xl font-bold text-gray-900">
-              {stats.totalCustomers}
+              {safeStats.totalCustomers}
               {vendorPlan?.subscription_plan === 'free_trial' && (
                 <span className="text-sm font-normal text-gray-400">/{getCustomerLimit()}</span>
               )}
@@ -347,8 +253,8 @@ export default function DashboardPage() {
             <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center mb-3">
               <IndianRupee className="w-5 h-5 text-red-500" />
             </div>
-            <p className={`text-2xl font-bold ${stats.totalPending > 0 ? 'text-red-500' : 'text-gray-900'}`}>
-              {formatAmount(stats.totalPending)}
+            <p className={`text-2xl font-bold ${safeStats.totalPending > 0 ? 'text-red-500' : 'text-gray-900'}`}>
+              {formatAmount(safeStats.totalPending)}
             </p>
             <p className="text-sm text-gray-500">{t('dashboard.totalPending')}</p>
           </div>
@@ -360,7 +266,7 @@ export default function DashboardPage() {
             <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center mb-3">
               <UtensilsCrossed className="w-5 h-5 text-orange-500" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{stats.todayMeals}</p>
+            <p className="text-2xl font-bold text-gray-900">{safeStats.todayMeals}</p>
             <p className="text-sm text-gray-500">{t('dashboard.todayMeals')}</p>
           </div>
 
@@ -371,7 +277,7 @@ export default function DashboardPage() {
             <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center mb-3">
               <TrendingUp className="w-5 h-5 text-green-500" />
             </div>
-            <p className="text-2xl font-bold text-green-600">{formatAmount(stats.thisMonthCollection)}</p>
+            <p className="text-2xl font-bold text-green-600">{formatAmount(safeStats.thisMonthCollection)}</p>
             <p className="text-sm text-gray-500">{t('dashboard.thisMonth')}</p>
           </div>
         </div>

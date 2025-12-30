@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { IndianRupee, Plus, Search, Calendar, TrendingUp, TrendingDown, MessageCircle } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
+import { useVendor } from '../../context/VendorContext'
+import { usePayments } from '../../hooks/useQueries'
+import { useQueryClient } from '@tanstack/react-query'
 import RecordPaymentModal from './RecordPaymentModal'
 import { ListSkeleton } from '../../components/ui/Skeleton'
 
@@ -34,185 +37,20 @@ interface PaymentRecord {
   }
 }
 
-interface MenuPrices {
-  chapati: number
-  rice: number
-}
-
 export default function PaymentsPage() {
+  const { vendor } = useVendor()
+  const queryClient = useQueryClient()
+  const { data: paymentsData, isLoading: loading, refetch } = usePayments()
+  
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending')
-  const [customers, setCustomers] = useState<CustomerWithPending[]>([])
-  const [payments, setPayments] = useState<PaymentRecord[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [showPaymentModal, setShowPaymentModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<CustomerWithPending | null>(null)
-  const [vendorId, setVendorId] = useState<string | null>(null)
-  const [vendorName, setVendorName] = useState('')
-  // const [_menuPrices, _setMenuPrices] = useState<MenuPrices>({ chapati: 50, rice: 70 })
 
-  useEffect(() => {
-    fetchData()
-  }, [])
-
-  const fetchData = async () => {
-    setLoading(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id, business_name')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-      setVendorId(vendor.id)
-      setVendorName(vendor.business_name)
-
-      // Fetch menu prices FIRST
-      const { data: _menuData } = await supabase
-        .from('menu_items')
-        .select('name, price')
-        .eq('vendor_id', vendor.id)
-
-      let chapatiPrice = 50
-      let ricePrice = 70
-      // if (menuData) {
-      //   const chapatiItem = menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
-      //   const riceItem = menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
-      //   chapatiPrice = chapatiItem?.price || 50
-      //   ricePrice = riceItem?.price || 70
-      // }
-      try {
-        const { data: _menuData, error: menuError } = await supabase
-          .from('menu_items')
-          .select('name, price')
-          .eq('vendor_id', vendor.id)
-
-        if (!menuError && _menuData && _menuData.length > 0) {
-          const chapatiItem = _menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
-          const riceItem = _menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
-          chapatiPrice = chapatiItem?.price || 50
-          ricePrice = riceItem?.price || 70
-        }
-      } catch (e) {
-        console.log('Menu fetch error, using defaults')
-      }
-
-      // Fetch customers with active subscriptions
-      const { data: customersData } = await supabase
-        .from('customers')
-        .select(`
-          id,
-          full_name,
-          mobile_number,
-          whatsapp_number,
-          lunch_meal_type,
-          dinner_meal_type,
-          subscriptions!inner (
-            id,
-            plan_amount,
-            billing_type,
-            meal_frequency,
-            status
-          )
-        `)
-        .eq('vendor_id', vendor.id)
-        .eq('is_active', true)
-        .eq('subscriptions.status', 'active')
-
-      // Fetch all payments for this vendor
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select(`
-          id,
-          customer_id,
-          amount,
-          payment_type,
-          payment_mode,
-          payment_date,
-          customers (
-            full_name
-          )
-        `)
-        .eq('vendor_id', vendor.id)
-        .order('payment_date', { ascending: false })
-        .limit(50)
-
-      // Fetch attendance for meal and guest calculation
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('customer_id, lunch_taken, dinner_taken, guest_count')
-        .eq('vendor_id', vendor.id)
-
-      // Calculate pending for each customer
-      const customersWithPending: CustomerWithPending[] = (customersData || []).map((c: any) => {
-        const customerPayments = (paymentsData || []).filter((p: any) => p.customer_id === c.id)
-        const totalPaid = customerPayments.reduce((sum: number, p: any) => sum + Number(p.amount), 0)
-        
-        const subscription = c.subscriptions?.[0]
-        const planAmount = subscription?.plan_amount || 0
-        const billingType = subscription?.billing_type || 'monthly'
-        const _mealFrequency = subscription?.meal_frequency || 'one_time'
-        
-        // Customer attendance
-        const customerAttendance = attendanceData?.filter(a => a.customer_id === c.id) || []
-        const lunchCount = customerAttendance.filter(a => a.lunch_taken).length
-        const dinnerCount = customerAttendance.filter(a => a.dinner_taken).length
-        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
-        
-        // Get meal prices based on customer preference
-        const lunchPrice = c.lunch_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
-        const dinnerPrice = c.dinner_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
-        const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
-        
-        // Calculate meal charges based on billing type
-        let mealCharges = 0
-        if (billingType === 'per_meal') {
-          mealCharges = (lunchCount * lunchPrice) + (dinnerCount * dinnerPrice)
-        } else {
-          mealCharges = planAmount
-        }
-        
-        // Guest charges based on menu price (NOT fixed ₹40)
-        const guestCharges = totalGuests * avgMealPrice
-        
-        // Total bill
-        const totalBill = mealCharges + guestCharges
-        
-        // Pending (can be negative = carry forward)
-        const pendingAmount = totalBill - totalPaid
-        
-        return {
-          id: c.id,
-          full_name: c.full_name,
-          mobile_number: c.mobile_number,
-          whatsapp_number: c.whatsapp_number,
-          lunch_meal_type: c.lunch_meal_type,
-          dinner_meal_type: c.dinner_meal_type,
-          subscription: subscription,
-          total_paid: totalPaid,
-          pending_amount: pendingAmount,
-          guest_charges: guestCharges,
-          meal_charges: mealCharges
-        }
-      })
-
-      // Show customers with pending > 0 in pending tab
-      setCustomers(customersWithPending.filter(c => c.pending_amount > 0))
-      setPayments((paymentsData || []).map((p: any) => ({
-        ...p,
-        customer: p.customers
-      })))
-
-    } catch (error) {
-      console.error('Error fetching data:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const customers = paymentsData?.pending || []
+  const payments = paymentsData?.history || []
+  const vendorId = vendor?.id || null
+  const vendorName = vendor?.business_name || ''
 
   const totalPending = customers.reduce((sum, c) => sum + Math.max(0, c.pending_amount), 0)
   const todayCollection = payments
@@ -460,7 +298,9 @@ _${vendorName}_
           onSuccess={() => {
             setShowPaymentModal(false)
             setSelectedCustomer(null)
-            fetchData()
+            refetch()
+            queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+            queryClient.invalidateQueries({ queryKey: ['customers'] })
           }}
         />
       )}

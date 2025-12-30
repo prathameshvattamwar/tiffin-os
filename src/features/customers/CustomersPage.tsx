@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
+import { useVendor } from '../../context/VendorContext'
+import { useCustomers } from '../../hooks/useQueries'
 import { useNavigate } from 'react-router-dom'
 import { Plus, Search, Filter, Users, Calendar, ChevronRight, X } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
@@ -30,95 +32,14 @@ type FilterType = 'all' | 'active' | 'expired' | 'expiring' | 'pending' | 'clear
 
 export default function CustomersPage() {
   const navigate = useNavigate()
-  const [customers, setCustomers] = useState<CustomerWithDetails[]>([])
-  const [loading, setLoading] = useState(true)
+  const { vendor } = useVendor()
+  const { data: customers = [], isLoading: loading, refetch } = useCustomers()
+
   const [searchQuery, setSearchQuery] = useState('')
   const [activeTab, setActiveTab] = useState<TabType>('monthly')
   const [activeFilter, setActiveFilter] = useState<FilterType>('all')
   const [showAddModal, setShowAddModal] = useState(false)
   const [showFilterMenu, setShowFilterMenu] = useState(false)
-
-  useEffect(() => {
-    fetchCustomers()
-  }, [])
-
-  const fetchCustomers = async () => {
-    setLoading(true)
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-
-      // Fetch all customers
-      const { data: customersData } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('vendor_id', vendor.id)
-        .order('created_at', { ascending: false })
-        .eq('is_active', true)
-
-      // Fetch all subscriptions
-      const { data: subscriptionsData } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('vendor_id', vendor.id)
-
-      // Fetch all payments
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('customer_id, amount')
-        .eq('vendor_id', vendor.id)
-
-      // Fetch all attendance for guest charges
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('customer_id, guest_count')
-        .eq('vendor_id', vendor.id)
-
-      // Combine data
-      const customersWithDetails: CustomerWithDetails[] = (customersData || []).map(customer => {
-        // Get latest subscription for customer
-        const customerSubs = subscriptionsData?.filter(s => s.customer_id === customer.id) || []
-        const activeSub = customerSubs.find(s => s.status === 'active')
-        const latestSub = activeSub || customerSubs.sort((a, b) => 
-          new Date(b.end_date).getTime() - new Date(a.end_date).getTime()
-        )[0]
-
-        // Calculate payments
-        const customerPayments = paymentsData?.filter(p => p.customer_id === customer.id) || []
-        const totalPaid = customerPayments.reduce((sum, p) => sum + Number(p.amount), 0)
-        
-        // Calculate guest charges (₹40 per guest)
-        const customerAttendance = attendanceData?.filter(a => a.customer_id === customer.id) || []
-        const totalGuests = customerAttendance.reduce((sum, a) => sum + (a.guest_count || 0), 0)
-        const guestCharges = totalGuests * 40
-
-        const planAmount = latestSub?.plan_amount || 0
-        const pendingAmount = Math.max(0, planAmount + guestCharges - totalPaid)
-
-        return {
-          ...customer,
-          subscription: latestSub,
-          pending_amount: pendingAmount,
-          total_paid: totalPaid,
-          guest_charges: guestCharges
-        }
-      })
-
-      setCustomers(customersWithDetails)
-    } catch (error) {
-      console.error('Error fetching customers:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   // Filter customers based on tab and filters
   const getFilteredCustomers = () => {
@@ -537,7 +458,7 @@ export default function CustomersPage() {
           onClose={() => setShowAddModal(false)}
           onSuccess={() => {
             setShowAddModal(false)
-            fetchCustomers()
+            refetch()
           }}
         />
       )}

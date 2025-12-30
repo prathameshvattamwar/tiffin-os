@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
+import { useVendor } from '../../context/VendorContext'
+import { useQuickAttendance } from '../../hooks/useQueries'
+import { useQueryClient } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, Check, Users, Plus, Minus, Search } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { ListSkeleton } from '../../components/ui/Skeleton'
@@ -27,11 +30,17 @@ interface AttendanceRecord {
 }
 
 export default function AttendancePage() {
+  const { vendor } = useVendor()
+  const queryClient = useQueryClient()
   const [mode, setMode] = useState<'quick' | 'calendar'>('quick')
-  const [customers, setCustomers] = useState<Customer[]>([])
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [vendorId, setVendorId] = useState<string | null>(null)
+  const [selectedDate, setSelectedDate] = useState(new Date())
+  
+  // React Query for quick attendance
+  const { data: quickData, isLoading: loading } = useQuickAttendance(selectedDate)
+  const customers = quickData?.customers || []
+  const [quickAttendance, setQuickAttendance] = useState<Map<string, { lunch: boolean; dinner: boolean; guestLunch: number; guestDinner: number }>>(new Map())
+
   const [_menuPrices, _setMenuPrices] = useState<{chapati: number, rice: number}>({ chapati: 50, rice: 70 })
   
   // Customer search states
@@ -39,9 +48,12 @@ export default function AttendancePage() {
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   
-  // Quick mode states
-  const [selectedDate, setSelectedDate] = useState(new Date())
-  const [quickAttendance, setQuickAttendance] = useState<Map<string, { lunch: boolean; dinner: boolean; guestLunch: number; guestDinner: number }>>(new Map())
+  // Sync quickAttendance with fetched data
+  useEffect(() => {
+    if (quickData?.attendance) {
+      setQuickAttendance(quickData.attendance)
+    }
+  }, [quickData])
   
   // Calendar mode states
   const [currentMonth, setCurrentMonth] = useState(new Date())
@@ -57,20 +69,10 @@ export default function AttendancePage() {
   })
 
   useEffect(() => {
-    fetchCustomers()
-  }, [])
-
-  useEffect(() => {
-    if (mode === 'quick' && vendorId) {
-      fetchQuickAttendance()
-    }
-  }, [selectedDate, mode, vendorId])
-
-  useEffect(() => {
-    if (selectedCustomer && mode === 'calendar' && vendorId) {
+    if (selectedCustomer && mode === 'calendar' && vendor) {
       fetchCustomerAttendance()
     }
-  }, [selectedCustomer, currentMonth, mode, vendorId])
+  }, [selectedCustomer, currentMonth, mode, vendor])
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -83,143 +85,32 @@ export default function AttendancePage() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  const fetchCustomers = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-      setVendorId(vendor.id)
-
-      const { data: customersData } = await supabase
-        .from('customers')
-        .select(`
-          id, full_name, mobile_number,
-          subscriptions (id, start_date, end_date, meal_frequency, status)
-        `)
-        .eq('vendor_id', vendor.id)
-        .eq('is_active', true)
-        .order('full_name')
-
-      const customersWithSub = (customersData || []).map((c: any) => ({
-        ...c,
-        subscription: c.subscriptions?.find((s: any) => s.status === 'active')
-      }))
-
-      setCustomers(customersWithSub)
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchQuickAttendance = async () => {
-  setLoading(true)
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
-
-    const { data: vendor } = await supabase
-      .from('vendors')
-      .select('id')
-      .eq('auth_user_id', user.id)
-      .single()
-
-    if (!vendor) return
-    setVendorId(vendor.id)
-
-    // Get selected date string (timezone safe)
-    const selectedDateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
-
-    // Fetch ALL active customers with their subscriptions
-    const { data: customersData } = await supabase
-      .from('customers')
-      .select(`
-        *,
-        subscriptions(id, start_date, end_date, meal_frequency, status)
-      `)
-      .eq('vendor_id', vendor.id)
-      .eq('is_active', true)
-      .order('full_name')
-
-    // Filter customers whose subscription includes selected date
-    const filteredCustomers = (customersData || [])
-      .map((c: any) => {
-        // Find active subscription that includes selected date
-        const activeSub = c.subscriptions?.find((s: any) => 
-          s.status === 'active' && 
-          s.start_date <= selectedDateStr && 
-          s.end_date >= selectedDateStr
-        )
-        return {
-          ...c,
-          subscription: activeSub || null
-        }
-      })
-      .filter((c: any) => c.subscription !== null) // Only show customers with valid subscription for this date
-
-    setCustomers(filteredCustomers)
-
-    // Fetch selected date's attendance
-    const { data: attendanceData } = await supabase
-      .from('attendance')
-      .select('customer_id, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count')
-      .eq('vendor_id', vendor.id)
-      .eq('attendance_date', selectedDateStr)
-
-    // Populate quickAttendance Map
-    const newMap = new Map<string, { lunch: boolean; dinner: boolean; guestLunch: number; guestDinner: number }>()
-    attendanceData?.forEach(record => {
-      newMap.set(record.customer_id, {
-        lunch: record.lunch_taken || false,
-        dinner: record.dinner_taken || false,
-        guestLunch: record.guest_lunch_count || 0,
-        guestDinner: record.guest_dinner_count || 0
-      })
-    })
-    setQuickAttendance(newMap)
-
-  } catch (error) {
-    console.error('Error fetching quick attendance:', error)
-  } finally {
-    setLoading(false)
-  }
-}
-
   const fetchMenuPrices = async () => {
-  if (!vendorId) return
+  if (!vendor) return
   
   const { data } = await supabase
     .from('menu_items')
-    .select('name, price')
-    .eq('vendor_id', vendorId)
+    .select('item_name, monthly_price')
+    .eq('vendor_id', vendor.id)
   
   if (data) {
-      const chapatiItem = data.find(item => item.name.toLowerCase().includes('chapati'))
-      const riceItem = data.find(item => item.name.toLowerCase().includes('rice'))
-      
+      const halfThali = data.find(item => item.item_name === 'Half Thali')
+      const fullThali = data.find(item => item.item_name === 'Full Thali')
       _setMenuPrices({
-        chapati: chapatiItem?.price || 50,
-        rice: riceItem?.price || 70
+        chapati: halfThali?.monthly_price || 50,
+        rice: fullThali?.monthly_price || 70
       })
     }
   }
 
   useEffect(() => {
-    if (vendorId) {
+    if (vendor) {
       fetchMenuPrices()
     }
-  }, [vendorId])
+  }, [vendor])
 
   const fetchCustomerAttendance = async () => {
-    if (!vendorId || !selectedCustomer) return
+    if (!vendor || !selectedCustomer) return
 
     const year = currentMonth.getFullYear()
     const month = currentMonth.getMonth()
@@ -250,7 +141,7 @@ export default function AttendancePage() {
   }
 
     const toggleQuickMeal = async (customerId: string, meal: 'lunch' | 'dinner') => {
-    if (!vendorId) return
+    if (!vendor) return
 
     const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guestLunch: 0, guestDinner: 0 }
     const updated = { ...current, [meal]: !current[meal] }
@@ -263,7 +154,7 @@ export default function AttendancePage() {
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     await supabase.from('attendance').upsert({
       customer_id: customerId,
-      vendor_id: vendorId,
+      vendor_id: vendor.id,
       attendance_date: dateStr,
       lunch_taken: updated.lunch,
       dinner_taken: updated.dinner,
@@ -272,10 +163,13 @@ export default function AttendancePage() {
       guest_dinner_count: updated.guestDinner,
       meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
     }, { onConflict: 'customer_id,attendance_date' })
+    
+    // Invalidate dashboard stats cache
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
   }
 
-    const updateQuickGuests = async (customerId: string, meal: 'lunch' | 'dinner', change: number) => {
-    if (!vendorId) return
+   const updateQuickGuests = async (customerId: string, meal: 'lunch' | 'dinner', change: number) => {
+    if (!vendor) return
 
     const current = quickAttendance.get(customerId) || { lunch: false, dinner: false, guestLunch: 0, guestDinner: 0 }
     
@@ -291,7 +185,7 @@ export default function AttendancePage() {
     const dateStr = `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
     await supabase.from('attendance').upsert({
       customer_id: customerId,
-      vendor_id: vendorId,
+      vendor_id: vendor.id,
       attendance_date: dateStr,
       lunch_taken: updated.lunch,
       dinner_taken: updated.dinner,
@@ -300,7 +194,12 @@ export default function AttendancePage() {
       guest_dinner_count: newGuestDinner,
       meal_taken: (updated.lunch || updated.dinner) ? 'present' : 'absent'
     }, { onConflict: 'customer_id,attendance_date' })
+    
+    // Invalidate dashboard stats cache
+    queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
   }
+
+  // Calendar helpers
 
   // Calendar helpers
   const getDaysInMonth = () => {
@@ -357,11 +256,11 @@ export default function AttendancePage() {
   }
 
   const saveDayAttendance = async () => {
-    if (!vendorId || !selectedCustomer || !showDayModal) return
+    if (!vendor || !selectedCustomer || !showDayModal) return
 
     await supabase.from('attendance').upsert({
       customer_id: selectedCustomer.id,
-      vendor_id: vendorId,
+      vendor_id: vendor.id,
       attendance_date: showDayModal,
       lunch_taken: dayFormData.lunch,
       dinner_taken: dayFormData.dinner,
