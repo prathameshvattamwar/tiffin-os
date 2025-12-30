@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useCustomerReport } from '../../hooks/useQueries'
 import { ArrowLeft, MessageCircle, Calendar, IndianRupee, UtensilsCrossed, User, Sun, Moon, Users, Calculator } from 'lucide-react'
-import { supabase } from '../../lib/supabase'
 
 interface MenuPrices {
   half_thali: number
@@ -49,114 +49,18 @@ interface ReportData {
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [report, setReport] = useState<ReportData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: reportData, isLoading: loading } = useCustomerReport(id)
   const [billingType, setBillingType] = useState<'monthly' | 'per_meal'>('monthly')
-  const [menuPrices, setMenuPrices] = useState<MenuPrices>({
-  half_thali: 50,
-  full_thali: 70
-})
 
-  useEffect(() => {
-    if (id) fetchReportData()
-  }, [id])
-
-  const fetchReportData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      // Fetch vendor
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id, business_name, mobile_number')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-
-      // Fetch menu prices
-      const { data: menuData } = await supabase
-      .from('menu_items')
-      .select('item_name, monthly_price')
-      .eq('vendor_id', vendor.id)
-      .eq('is_default', true)
-
-      if (menuData) {
-        const halfThali = menuData.find(m => m.item_name === 'Half Thali')
-        const fullThali = menuData.find(m => m.item_name === 'Full Thali')
-        setMenuPrices({
-          half_thali: halfThali?.monthly_price || 50,
-          full_thali: fullThali?.monthly_price || 70
-        })
-      } 
-
-      // Fetch customer
-      const { data: customer } = await supabase
-        .from('customers')
-        .select('full_name, mobile_number, whatsapp_number, meal_type, lunch_meal_type, dinner_meal_type')
-        .eq('id', id)
-        .single()
-
-      // Fetch subscription
-      const { data: subscription } = await supabase
-        .from('subscriptions')
-        .select('start_date, end_date, meal_frequency, plan_amount')
-        .eq('customer_id', id)
-        .eq('status', 'active')
-        .single()
-
-      // Fetch attendance stats
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('attendance_date, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count')
-        .eq('customer_id', id)
-
-      // Calculate attendance metrics
-      const daysPresent = new Set(
-        attendanceData?.filter(a => a.lunch_taken || a.dinner_taken).map(a => a.attendance_date)
-      ).size
-      const lunchCount = attendanceData?.filter(a => a.lunch_taken).length || 0
-      const dinnerCount = attendanceData?.filter(a => a.dinner_taken).length || 0
-      const totalMeals = lunchCount + dinnerCount
-      const guestCount = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
-      const guestLunchCount = attendanceData?.reduce((sum, a) => sum + (a.guest_lunch_count || 0), 0) || 0
-      const guestDinnerCount = attendanceData?.reduce((sum, a) => sum + (a.guest_dinner_count || 0), 0) || 0
-
-      // Fetch payments
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('amount, payment_date, payment_mode')
-        .eq('customer_id', id)
-        .order('payment_date', { ascending: false })
-
-      const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
-
-      setReport({
-        customer: customer!,
-        vendor: { business_name: vendor.business_name, mobile_number: vendor.mobile_number },
-        subscription,
-        attendance: { 
-          daysPresent, 
-          lunchCount, 
-          dinnerCount, 
-          totalMeals, 
-          guestCount,
-          guestLunchCount,
-          guestDinnerCount
-        },
-        payments: {
-          total_paid: totalPaid,
-          history: paymentsData || []
-        }
-      })
-
-    } catch (error) {
-      console.error('Error fetching report:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const report = reportData ? {
+    customer: reportData.customer,
+    vendor: reportData.vendor,
+    subscription: reportData.subscription,
+    attendance: reportData.attendance,
+    payments: reportData.payments
+  } : null
+  
+  const menuPrices = reportData?.menuPrices || { half_thali: 50, full_thali: 70 }
 
 const calculateBill = () => {
   if (!report) return { mealCharges: 0, guestCharges: 0, guestLunchCharges: 0, guestDinnerCharges: 0, totalDue: 0, pending: 0, lunchPrice: 0, dinnerPrice: 0 }

@@ -292,3 +292,200 @@ export function usePayments() {
     staleTime: 1000 * 60 * 2, // 2 min cache
   })
 }
+
+// ============ CUSTOMER DETAIL ============
+export function useCustomerDetail(customerId: string | undefined) {
+  const { vendor } = useVendor()
+
+  return useQuery({
+    queryKey: ['customer-detail', customerId],
+    queryFn: async () => {
+      if (!customerId || !vendor) return null
+
+      // Fetch customer
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('*')
+        .eq('id', customerId)
+        .single()
+
+      if (customerError) throw customerError
+
+      // Fetch subscription
+      const { data: subscriptionData } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('customer_id', customerId)
+        .eq('status', 'active')
+        .single()
+
+      // Fetch payments
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('amount')
+        .eq('customer_id', customerId)
+
+      const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+      const planAmount = subscriptionData?.plan_amount || 0
+
+      // Fetch attendance count
+      const { count: attendanceCount } = await supabase
+        .from('attendance')
+        .select('*', { count: 'exact', head: true })
+        .eq('customer_id', customerId)
+        .or('lunch_taken.eq.true,dinner_taken.eq.true')
+
+      // Calculate guest charges
+      const { data: attendanceData } = await supabase
+        .from('attendance')
+        .select('guest_count')
+        .eq('customer_id', customerId)
+
+      const totalGuests = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
+
+      // Fetch menu prices
+      const { data: menuData } = await supabase
+        .from('menu_items')
+        .select('item_name, monthly_price')
+        .eq('vendor_id', customerData.vendor_id)
+        .eq('is_default', true)
+
+      const halfThali = menuData?.find(m => m.item_name === 'Half Thali')
+      const fullThali = menuData?.find(m => m.item_name === 'Full Thali')
+      const halfPrice = halfThali?.monthly_price || 50
+      const fullPrice = fullThali?.monthly_price || 70
+
+      // Guest charges based on menu price
+      const lunchPrice = customerData.lunch_meal_type === 'full_thali' ? fullPrice : halfPrice
+      const dinnerPrice = customerData.dinner_meal_type === 'full_thali' ? fullPrice : halfPrice
+      const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
+      const guestCharges = totalGuests * avgMealPrice
+
+      const pendingAmount = planAmount + guestCharges - totalPaid
+
+      return {
+        ...customerData,
+        subscription: subscriptionData,
+        total_paid: totalPaid,
+        pending_amount: pendingAmount,
+        attendance_count: attendanceCount || 0,
+        guest_charges: guestCharges,
+        total_guests: totalGuests
+      }
+    },
+    enabled: !!customerId && !!vendor,
+    staleTime: 1000 * 60 * 2, // 2 min cache
+  })
+}
+
+// ============ CUSTOMER REPORT ============
+export function useCustomerReport(customerId: string | undefined) {
+  const { vendor } = useVendor()
+
+  return useQuery({
+    queryKey: ['customer-report', customerId],
+    queryFn: async () => {
+      if (!customerId || !vendor) return null
+
+      // Fetch menu prices
+      const { data: menuData } = await supabase
+        .from('menu_items')
+        .select('item_name, monthly_price')
+        .eq('vendor_id', vendor.id)
+        .eq('is_default', true)
+
+      const halfThali = menuData?.find(m => m.item_name === 'Half Thali')
+      const fullThali = menuData?.find(m => m.item_name === 'Full Thali')
+      const menuPrices = {
+        half_thali: halfThali?.monthly_price || 50,
+        full_thali: fullThali?.monthly_price || 70
+      }
+
+      // Fetch customer
+      const { data: customer } = await supabase
+        .from('customers')
+        .select('full_name, mobile_number, whatsapp_number, meal_type, lunch_meal_type, dinner_meal_type')
+        .eq('id', customerId)
+        .single()
+
+      // Fetch subscription
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('start_date, end_date, meal_frequency, plan_amount')
+        .eq('customer_id', customerId)
+        .eq('status', 'active')
+        .single()
+
+      // Fetch attendance stats
+      const { data: attendanceData } = await supabase
+        .from('attendance')
+        .select('attendance_date, lunch_taken, dinner_taken, guest_count, guest_lunch_count, guest_dinner_count')
+        .eq('customer_id', customerId)
+
+      // Calculate attendance metrics
+      const daysPresent = new Set(
+        attendanceData?.filter(a => a.lunch_taken || a.dinner_taken).map(a => a.attendance_date)
+      ).size
+      const lunchCount = attendanceData?.filter(a => a.lunch_taken).length || 0
+      const dinnerCount = attendanceData?.filter(a => a.dinner_taken).length || 0
+      const totalMeals = lunchCount + dinnerCount
+      const guestCount = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
+      const guestLunchCount = attendanceData?.reduce((sum, a) => sum + (a.guest_lunch_count || 0), 0) || 0
+      const guestDinnerCount = attendanceData?.reduce((sum, a) => sum + (a.guest_dinner_count || 0), 0) || 0
+
+      // Fetch payments
+      const { data: paymentsData } = await supabase
+        .from('payments')
+        .select('amount, payment_date, payment_mode')
+        .eq('customer_id', customerId)
+        .order('payment_date', { ascending: false })
+
+      const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
+
+      return {
+        menuPrices,
+        customer: customer!,
+        vendor: { business_name: vendor.business_name, mobile_number: (vendor as any).mobile_number || '' },
+        subscription,
+        attendance: {
+          daysPresent,
+          lunchCount,
+          dinnerCount,
+          totalMeals,
+          guestCount,
+          guestLunchCount,
+          guestDinnerCount
+        },
+        payments: {
+          total_paid: totalPaid,
+          history: paymentsData || []
+        }
+      }
+    },
+    enabled: !!customerId && !!vendor,
+    staleTime: 1000 * 60 * 2, // 2 min cache
+  })
+}
+
+// ============ MENU ITEMS (for Quick Sale) ============
+export function useMenuItems() {
+  const { vendor } = useVendor()
+
+  return useQuery({
+    queryKey: ['menu-items', vendor?.id],
+    queryFn: async () => {
+      if (!vendor) return []
+
+      const { data } = await supabase
+        .from('menu_items')
+        .select('id, item_name, category, walk_in_price')
+        .eq('vendor_id', vendor.id)
+        .eq('is_active', true)
+        .order('category')
+
+      return data || []
+    },
+    enabled: !!vendor,
+    staleTime: 1000 * 60 * 10, // 10 min cache
+  })
+}

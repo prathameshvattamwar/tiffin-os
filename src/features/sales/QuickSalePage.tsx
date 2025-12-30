@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useVendor } from '../../context/VendorContext'
+import { useMenuItems } from '../../hooks/useQueries'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Plus, Minus, Trash2, MessageCircle, ShoppingBag } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 
@@ -17,48 +20,17 @@ interface CartItem {
 
 export default function QuickSalePage() {
   const navigate = useNavigate()
-  const [menuItems, setMenuItems] = useState<MenuItem[]>([])
-  const [cart, setCart] = useState<CartItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [vendorId, setVendorId] = useState<string | null>(null)
+  const { vendor } = useVendor()
+  const queryClient = useQueryClient()
+  const { data: menuItems = [], isLoading: loading } = useMenuItems()
   
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [saving, setSaving] = useState(false)
   const [customerName, setCustomerName] = useState('')
   const [customerMobile, setCustomerMobile] = useState('')
   const [paymentMode, setPaymentMode] = useState('cash')
 
-  useEffect(() => {
-    fetchMenuItems()
-  }, [])
-
-  const fetchMenuItems = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-
-      const { data: vendor } = await supabase
-        .from('vendors')
-        .select('id')
-        .eq('auth_user_id', user.id)
-        .single()
-
-      if (!vendor) return
-      setVendorId(vendor.id)
-
-      const { data } = await supabase
-        .from('menu_items')
-        .select('id, item_name, category, walk_in_price')
-        .eq('vendor_id', vendor.id)
-        .eq('is_active', true)
-        .order('category')
-
-      setMenuItems(data || [])
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const vendorId = vendor?.id || null
 
   const addToCart = (item: MenuItem) => {
     const existing = cart.find(c => c.menu_item.id === item.id)
@@ -150,6 +122,10 @@ export default function QuickSalePage() {
       setCart([])
       setCustomerName('')
       setCustomerMobile('')
+      
+      // Invalidate caches
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+      queryClient.invalidateQueries({ queryKey: ['payments'] })
       
       alert('Sale recorded successfully!')
       

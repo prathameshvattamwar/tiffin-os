@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useCustomerDetail } from '../../hooks/useQueries'
+import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, Phone, MessageCircle, Edit2, Calendar, IndianRupee, UtensilsCrossed, FileText, Users, Trash2 } from 'lucide-react'
 import { supabase } from '../../lib/supabase'
 import { Skeleton } from '../../components/ui/Skeleton'
@@ -33,113 +35,12 @@ interface CustomerDetail {
 export default function CustomerDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [customer, setCustomer] = useState<CustomerDetail | null>(null)
-  const [loading, setLoading] = useState(true)
+  const queryClient = useQueryClient()
+  const { data: customer, isLoading: loading, refetch } = useCustomerDetail(id)
+  
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
-
-  useEffect(() => {
-    if (id) fetchCustomerDetail()
-  }, [id])
-
-  const fetchCustomerDetail = async () => {
-    setLoading(true)
-    try {
-      // Fetch customer
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('*')
-        .eq('id', id)
-        .single()
-
-      if (customerError) throw customerError
-
-      // Fetch subscription
-      const { data: subscriptionData } = await supabase
-        .from('subscriptions')
-        .select('*')
-        .eq('customer_id', id)
-        .eq('status', 'active')
-        .single()
-
-      // Fetch payments
-      const { data: paymentsData } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('customer_id', id)
-
-      const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0
-      const planAmount = subscriptionData?.plan_amount || 0
-
-      // Fetch attendance count
-      const { count: attendanceCount } = await supabase
-        .from('attendance')
-        .select('*', { count: 'exact', head: true })
-        .eq('customer_id', id)
-        .or('lunch_taken.eq.true,dinner_taken.eq.true')
-
-      // Calculate guest charges
-      const { data: attendanceData } = await supabase
-        .from('attendance')
-        .select('guest_count')
-        .eq('customer_id', id)
-
-      const totalGuests = attendanceData?.reduce((sum, a) => sum + (a.guest_count || 0), 0) || 0
-      // Fetch menu prices
-const { data: _menuData } = await supabase
-  .from('menu_items')
-  .select('name, price')
-  .eq('vendor_id', customerData.vendor_id)
-
-let chapatiPrice = 50
-let ricePrice = 70
-// if (menuData) {
-//   const chapatiItem = menuData.find(m => m.name.toLowerCase().includes('chapati'))
-//   const riceItem = menuData.find(m => m.name.toLowerCase().includes('rice'))
-//   chapatiPrice = chapatiItem?.price || 50
-//   ricePrice = riceItem?.price || 70
-// }
-
-try {
-  const { data: _menuData, error: menuError } = await supabase
-    .from('menu_items')
-    .select('name, price')
-    .eq('vendor_id', customerData.vendor_id)
-
-  if (!menuError && _menuData && _menuData.length > 0) {
-    const chapatiItem = _menuData.find((m: any) => m.name.toLowerCase().includes('chapati'))
-    const riceItem = _menuData.find((m: any) => m.name.toLowerCase().includes('rice'))
-    chapatiPrice = chapatiItem?.price || 50
-    ricePrice = riceItem?.price || 70
-  }
-} catch (e) {
-  console.log('Menu fetch error, using defaults')
-}
-
-    // Guest charges based on menu price
-    const lunchPrice = customerData.lunch_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
-    const dinnerPrice = customerData.dinner_meal_type === 'rice_plate' ? ricePrice : chapatiPrice
-    const avgMealPrice = Math.round((lunchPrice + dinnerPrice) / 2)
-    const guestCharges = totalGuests * avgMealPrice
-
-      const pendingAmount = planAmount + guestCharges - totalPaid 
-
-      setCustomer({
-        ...customerData,
-        subscription: subscriptionData,
-        total_paid: totalPaid,
-        pending_amount: pendingAmount,
-        attendance_count: attendanceCount || 0,
-        guest_charges: guestCharges,
-        total_guests: totalGuests
-      })
-    } catch (error) {
-      console.error('Error:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const handleDeleteCustomer = async () => {
   setDeleting(true)
@@ -155,6 +56,7 @@ try {
 
       if (error) throw error
       
+      queryClient.invalidateQueries({ queryKey: ['customers'] })
       navigate('/customers')
     } catch (error: any) {
       alert('Error deleting customer: ' + error.message)
@@ -384,7 +286,11 @@ try {
         {customer.subscription && (
           <RenewSubscriptionButton 
             customer={customer}
-            onSuccess={fetchCustomerDetail}
+            onSuccess={() => {
+              refetch()
+              queryClient.invalidateQueries({ queryKey: ['customers'] })
+              queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] })
+            }}
           />
         )}
 
@@ -452,7 +358,8 @@ try {
           onClose={() => setShowEditModal(false)}
           onSuccess={() => {
             setShowEditModal(false)
-            fetchCustomerDetail()
+            refetch()
+            queryClient.invalidateQueries({ queryKey: ['customers'] })
           }}
         />
       )}
